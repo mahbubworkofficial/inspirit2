@@ -1,0 +1,62 @@
+{
+  "project_info": {
+    "project_number": "303811596371",
+    "project_id": "jordyn-54224",
+    "storage_bucket": "jordyn-54224.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:303811596371:android:c26c8d5367dd66485636a6",
+        "android_client_info": {
+          "package_name": "insprit.com.jordyn"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "303811596371-5b290tu445rj5ri2kv153nacepcg4qno.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "insprit.com.jordyn",
+            "certificate_hash": "0b14dc927041af668bfe19bdc4049c1e0e481f72"
+          }
+        },
+        {
+          "client_id": "303811596371-bnuc68g7llg4vnnjolkud5iug26ouv9o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "insprit.com.jordyn",
+            "certificate_hash": "908fcd83e256b0e4b1124c88f954e67e01be552c"
+          }
+        },
+        {
+          "client_id": "303811596371-0bb9te4cb7ft8thtgkcqbdddulh6rvaf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCDkmh-XzMM8pgjA0o7xmkz4eaCtW2WuYc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "303811596371-0bb9te4cb7ft8thtgkcqbdddulh6rvaf.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "303811596371-mlveobfsas2fsggul7ds7nonb9guudgr.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "insprit.com.jordyn"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,77 @@
+import 'dart:ui';
+import 'package:flutter/material.dart';
+
+class AppColor {
+  static const Color backgroundColor = Color(0xFFF9F3E7);
+
+  static const Color backgroundColor1 = Color(0xFFD4F7E3);
+  static const Color nameColor = Color(0xFF006767);
+  static const Color circleColor = Color(0xFF009595);
+  static const Color buttonColor = Color(0xFFA1B17E);
+  static const Color defaultColor = Color(0xFFA1B17E);
+  static const Color default1Color = Color(0xFFA5B77D);
+  static const Color default2Color = Color(0xFFA9BE8B);
+  static const Color textBlackColor = Color(0xFF2A2A2A);
+  static const Color black5Color = Color(0x80000000);
+  static const Color black20Color = Color(0x33000000);
+  static const Color textColor = Color(0xFF797573);
+  static const Color textWhiteColor = Color(0xFFFFFFFF);
+  static const Color textTitleColor = Color(0xFF002B5B);
+  static const Color textHintColor = Color(0xFF807B75);
+  static const Color textGreenColor = Color(0xFFA1B17E);
+  static const Color buttonBackgroundColor = Color(0xFFF1EADB);
+  static const Color buttonBackgroundColor1 = Color(0xFFF8F3E8);
+  static const Color buttonDisableColor = Color(0xFF8D8D8D);
+  static const Color greyTone1 = Color(0xFF636A70);
+  static const Color textGreyColor = Color(0xFF636A70);
+  static const Color textGreyColor2 = Color(0xFF676360);
+  static const Color textGreyColor3 = Color(0xFFAEAEB2);
+  static const Color textSendColor = Color(0xFF806E6A);
+  static const Color whiteTextColor = Color(0xFFEEEEEE);
+  static const Color hintTextColor = Color(0xFFB6B7BB);
+  static const Color textareaColor = Color(0xFFFDFDFE);
+  static const Color background1Color = Color(0xFFEAEAEA);
+  static const Color backColor = Color(0xFFECF0FF);
+  static const Color borderColor = Color(0xFFE7E9EE);
+  static const Color black25 = Color(0x40000000);
+  static const Color blackColor = Color(0xFF000000);
+  static const Color black12Color = Color(0x1E000000);
+  static const Color black87Color = Color(0xDD000000);
+  static const Color black26Color = Color(0x42000000);
+  static const Color whiteColor = Color(0xFFFFFFFF);
+  static const Color white24Color = Color(0x3DFFFFFF);
+  static const Color white1Color = Color(0xFFEAE0D0);
+  static const Color white2Color = Color(0xFFE8DBC4);
+  static const Color white3Color = Color(0xFDF5F0E7);
+  static const Color white4Color = Color(0xFFF8F3EB);
+  static const Color white5Color = Color(0xFFFAF3E9);
+  static const Color black54Color = Color(0x8A000000);
+  static const Color greyColor = Color(0xFFE0E0E0);
+  static const Color grey3Color = Color(0x4DE0E0E0);
+  static const Color grey100Color = Color(0xFFF5F5F5);
+  static const Color grey400Color = Color(0xFFBDBDBD);
+  static const Color grey700Color = Color(0xFF616161);
+  static const Color greyColor1 = Color(0xFF9E9E9E);
+  static const Color black10 = Color(0x1A000000);
+  static const Color blueColor = Color(0xFF2196F3);
+  static const Color greyBC = Color(0xFFBCBCC0);
+  static const Color darkGrey = Color(0xFF343537);
+  static const Color subTitleGrey = Color(0xFF8E8E93);
+
+  static const Color textAreaColor = Color(0xFFE6DBC9);
+  static const Color greyTone = Color(0xFF676360);
+  static const Color beigeBrown = Color(0xFFC4AD8E);
+  static const Color lightBeige = Color(0xFFF1E9DB);
+  static const Color softBeige = Color(0xFFE6DBC9);
+
+  static const Color deepRed = Color(0xFFCA0000);
+  static const Color redColor = Color(0xFFFF0000);
+  static const Color greenAccentColor = Color(0xFF69F0AE);
+  static const Color greenColor = Color(0xFF4CAF50);
+  static const Color lightGreenColor = Color(0xFFB3C9A9);
+  static const Color redAlphaColor = Color(0xCCF44336);
+  static const Color orangeColor = Color(0xFFFB7065);
+  static const Color orange1Color = Color(0xFFFF9800);
+  static const Color vividBlue = Color(0xFF1D85FF);
+  static const Color mutedBlueGrey = Color(0xFF767D95);
+}
