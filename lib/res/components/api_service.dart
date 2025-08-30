@@ -10,13 +10,92 @@ import '../../widgets/show_custom_snack_ber.dart';
 import '../app_url/app_url.dart';
 
 class ApiService extends GetxService {
-  //Auth
   final http.Client client;
-
   ApiService({http.Client? client}) : client = client ?? http.Client();
 
+  Future<Map<String, dynamic>> fetchCondolences(String token, {int page = 1}) async {
+    final url = Uri.parse('${AppUrl.condolenceUrl}?page=$page');
 
-  Future<Map<String, dynamic>> fetchMessages(String roomId, String token) async {
+    try {
+      final response = await client.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      debugPrint('fetchCondolences URL: $url');
+      debugPrint('fetchCondolences Status: ${response.statusCode}');
+      debugPrint('fetchCondolences Response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        List<dynamic> data = jsonDecode(response.body);
+        return {'statusCode': 200, 'data': data};
+      } else {
+        final errorData = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+        return {
+          'statusCode': response.statusCode,
+          'data': {
+            'error': errorData['detail'] ??
+                errorData['message'] ??
+                'Failed to load condolences',
+          },
+        };
+      }
+    } catch (e, stackTrace) {
+      debugPrint('fetchCondolences Exception: $e\nStack: $stackTrace');
+      return {
+        'statusCode': 500,
+        'data': {'error': e.toString()},
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> createCondolence(String token, String message) async {
+    final url = Uri.parse(AppUrl.condolenceUrl);
+
+    try {
+      final response = await client.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'condolence_message': message}),
+      );
+
+      debugPrint('createCondolence URL: $url');
+      debugPrint('createCondolence Status: ${response.statusCode}');
+      debugPrint('createCondolence Response: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+        return {'statusCode': 200, 'data': decoded};
+      } else {
+        final errorData = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+        return {
+          'statusCode': response.statusCode,
+          'data': {
+            'error': errorData['detail'] ??
+                errorData['message'] ??
+                'Failed to create condolence',
+          },
+        };
+      }
+    } catch (e, stackTrace) {
+      debugPrint('createCondolence Error: $e\n$stackTrace');
+      return {
+        'statusCode': 500,
+        'data': {'error': e.toString()},
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> fetchMessages(
+    String roomId,
+    String token,
+  ) async {
     final url = Uri.parse('${AppUrl.chatUrl}$roomId/messages/');
     try {
       final response = await client.get(
@@ -32,11 +111,15 @@ class ApiService extends GetxService {
         debugPrint("Messages: $data");
         return {'statusCode': 200, 'data': data};
       } else {
-        final errorData = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+        final errorData =
+            response.body.isNotEmpty ? jsonDecode(response.body) : {};
         return {
           'statusCode': response.statusCode,
           'data': {
-            'error': errorData['detail'] ?? errorData['message'] ?? 'Failed to fetch messages',
+            'error':
+                errorData['detail'] ??
+                errorData['message'] ??
+                'Failed to fetch messages',
           },
         };
       }
@@ -49,9 +132,11 @@ class ApiService extends GetxService {
     }
   }
 
-
-  // Send a new message in a specific room
-  Future<Map<String, dynamic>> sendMessage(String roomId, String token, Map<String, dynamic> messageContent) async {
+  Future<Map<String, dynamic>> sendMessage(
+    String roomId,
+    String token,
+    Map<String, dynamic> messageContent,
+  ) async {
     final url = Uri.parse('${AppUrl.chatUrl}$roomId/messages/');
     try {
       final response = await client.post(
@@ -66,11 +151,15 @@ class ApiService extends GetxService {
       if (response.statusCode == 201) {
         return {'statusCode': 201, 'data': 'Message sent'};
       } else {
-        final errorData = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+        final errorData =
+            response.body.isNotEmpty ? jsonDecode(response.body) : {};
         return {
           'statusCode': response.statusCode,
           'data': {
-            'error': errorData['detail'] ?? errorData['message'] ?? 'Failed to send message',
+            'error':
+                errorData['detail'] ??
+                errorData['message'] ??
+                'Failed to send message',
           },
         };
       }
@@ -84,10 +173,10 @@ class ApiService extends GetxService {
   }
 
   Future<Map<String, dynamic>> fetchOtherUserEvents(
-      String token,
-      String userId,
-      int page,
-      ) async {
+    String token,
+    String userId,
+    int page,
+  ) async {
     final url = Uri.parse('${AppUrl.eventUrl}$userId/?page=$page');
 
     try {
@@ -109,12 +198,12 @@ class ApiService extends GetxService {
         return {'statusCode': 200, 'data': otherUserEvents};
       } else {
         final errorData =
-        response.body.isNotEmpty ? jsonDecode(response.body) : {};
+            response.body.isNotEmpty ? jsonDecode(response.body) : {};
         return {
           'statusCode': response.statusCode,
           'data': {
             'error':
-            errorData['detail'] ??
+                errorData['detail'] ??
                 errorData['message'] ??
                 'Failed to load events',
           },
@@ -129,8 +218,10 @@ class ApiService extends GetxService {
     }
   }
 
-
-  Future<Map<String, dynamic>> fetchMemories(String token, String personId) async {
+  Future<Map<String, dynamic>> fetchMemories(
+    String token,
+    String personId,
+  ) async {
     final url = Uri.parse('${AppUrl.personUrl}$personId/memories/');
 
     try {
@@ -151,11 +242,12 @@ class ApiService extends GetxService {
         return {'statusCode': 200, 'data': data};
       } else {
         final errorData =
-        response.body.isNotEmpty ? jsonDecode(response.body) : {};
+            response.body.isNotEmpty ? jsonDecode(response.body) : {};
         return {
           'statusCode': response.statusCode,
           'data': {
-            'error': errorData['detail'] ??
+            'error':
+                errorData['detail'] ??
                 errorData['message'] ??
                 'Failed to load memories',
           },
@@ -171,9 +263,9 @@ class ApiService extends GetxService {
   }
 
   Future<Map<String, dynamic>> deletePerson(
-      String token,
-      String requestId,
-      ) async {
+    String token,
+    String requestId,
+  ) async {
     final url = Uri.parse('${AppUrl.personUrl}$requestId/');
 
     debugPrint('deletePerson URL: $url');
@@ -199,12 +291,12 @@ class ApiService extends GetxService {
         };
       } else {
         final errorData =
-        response.body.isNotEmpty ? jsonDecode(response.body) : {};
+            response.body.isNotEmpty ? jsonDecode(response.body) : {};
         return {
           'statusCode': response.statusCode,
           'data': {
             'error':
-            errorData['detail'] ??
+                errorData['detail'] ??
                 errorData['message'] ??
                 'Failed to delete person ',
           },
@@ -240,11 +332,12 @@ class ApiService extends GetxService {
         return {'statusCode': 200, 'data': data};
       } else {
         final errorData =
-        response.body.isNotEmpty ? jsonDecode(response.body) : {};
+            response.body.isNotEmpty ? jsonDecode(response.body) : {};
         return {
           'statusCode': response.statusCode,
           'data': {
-            'error': errorData['detail'] ??
+            'error':
+                errorData['detail'] ??
                 errorData['message'] ??
                 'Failed to load persons',
           },
@@ -483,11 +576,11 @@ class ApiService extends GetxService {
           'statusCode': response.statusCode,
           'data': {
             'error':
-            err['detail'] ?? err['message'] ?? 'Failed to create person',
+                err['detail'] ?? err['message'] ?? 'Failed to create person',
           },
         };
       }
-    }catch (e) {
+    } catch (e) {
       debugPrint('API error: $e');
       return {
         'statusCode': 500,
@@ -644,6 +737,7 @@ class ApiService extends GetxService {
       };
     }
   }
+
   Future<Map<String, dynamic>> createMemory(
     String id,
     String title,

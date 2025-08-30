@@ -7,7 +7,6 @@ import '../../../../res/colors/app_color.dart';
 import '../../../../widgets/custom_button.dart';
 import '../../../../widgets/input_text_widget.dart';
 import '../controllers/memory_controller.dart';
-import 'memory_history_view.dart';
 
 class CreateCondolencesView extends GetView<MemoryController> {
   const CreateCondolencesView({super.key});
@@ -19,16 +18,20 @@ class CreateCondolencesView extends GetView<MemoryController> {
     return Scaffold(
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
-        toolbarHeight: 80,
+        toolbarHeight: 80.h,
         leading: IconButton(
           onPressed: () {
             Get.back();
           },
-          icon: Icon(Icons.arrow_back_ios, size: 20),
+          icon: Icon(Icons.arrow_back_ios, size: 20.sp),
         ),
         title: Text(
           'Add Condolence message',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 20.sp,
+            fontFamily: 'Montserrat',
+          ),
         ),
         centerTitle: true,
       ),
@@ -36,28 +39,25 @@ class CreateCondolencesView extends GetView<MemoryController> {
         children: [
           SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: EdgeInsets.symmetric(horizontal: 20.w),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(height: 20.h),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20.h),
-                    child: Text(
-                      'Vestibulum sodales pulvinar accumsan raseing rhoncus neque',
-                      style: TextStyle(
-                        color: AppColor.greyTone,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w400,
-                        fontFamily: 'Montserrat',
-                      ),
-                      textAlign: TextAlign.start,
+                  SizedBox(height: 15.h),
+                  Text(
+                    'Vestibulum sodales pulvinar accumsan raseing rhoncus neque',
+                    style: TextStyle(
+                      color: AppColor.greyTone,
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.w400,
+                      fontFamily: 'Montserrat',
                     ),
+                    textAlign: TextAlign.start,
                   ),
-                  SizedBox(height: 8.h),
-                  SizedBox(height: 10.h),
+                  SizedBox(height: 20.h),
                   InputTextWidget(
                     onChanged: (value) {},
+                    textEditingController: controller.condolenceTextController,
                     backgroundColor: AppColor.textAreaColor,
                     borderColor: Colors.transparent,
                     hintText: 'Add condolence message',
@@ -65,17 +65,16 @@ class CreateCondolencesView extends GetView<MemoryController> {
                     passwordIcon: ImageAssets.time,
                     height: 148,
                     maxLines: 10,
+                    vertical: 10,
+                    horizontal: 7,
                   ),
-                  SizedBox(height: 150.h),
+                  SizedBox(height: 190.h),
                   CustomButton(
                     title: 'ADD',
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                     onPress: () async {
-                      Get.to(
-                        MemoryHistoryView(),
-                        transition: Transition.noTransition,
-                      );
+                      await controller.submitCondolence();
                     },
                     buttonColor: AppColor.buttonColor,
                     height: 50,

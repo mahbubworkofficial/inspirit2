@@ -33,6 +33,7 @@ class AppUrl {
   static const String personUrl = '$_baseUrl/persons/';
   static const String chatUrl = '$_baseUrl/chat-rooms/';
   static const String treeUrl = '$_baseUrl/family-tree/';
+  static const String condolenceUrl = '$_baseUrl/condolences/';
 
 
 

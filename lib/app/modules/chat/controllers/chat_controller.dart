@@ -1,9 +1,10 @@
-import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
 import 'package:get/get.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:jordyn/app/modules/chat/controllers/web_socket_service.dart';
 
 import '../../../../res/app_url/app_url.dart';
 import '../../../../res/components/api_service.dart';
@@ -16,6 +17,9 @@ class ChatController extends GetxController {
   final AuthController authController = Get.find<AuthController>();
   final ProfileController profileController = Get.put(ProfileController());
 
+  // WebSocket Service
+  WebSocketService? _wsService;
+
   // Messages for current chat room
   final RxList<Map<String, dynamic>> messages = <Map<String, dynamic>>[].obs;
   final RxString message = ''.obs;
@@ -23,20 +27,51 @@ class ChatController extends GetxController {
   final TextEditingController textController = TextEditingController();
   final RxBool isMessageLoading = false.obs;
 
-  WebSocketChannel? channel;
+  // File handling
+  final ImagePicker _picker = ImagePicker();
+  final RxBool isFileUploading = false.obs;
+
+  // Add scroll controller reference
+  ScrollController? scrollController;
+
   int? currentRoomId;
 
+  // Set scroll controller reference
+  void setScrollController(ScrollController controller) {
+    scrollController = controller;
+  }
+
+  // Scroll to bottom method
+  void scrollToBottom({bool animate = true}) {
+    if (scrollController?.hasClients == true) {
+      if (animate) {
+        scrollController!.animateTo(
+          scrollController!.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      } else {
+        scrollController!.jumpTo(scrollController!.position.maxScrollExtent);
+      }
+    }
+  }
 
   // Initialize chat for a specific room
   Future<void> initializeChat(int roomId) async {
     currentRoomId = roomId;
     messages.clear(); // Clear previous messages
 
+    // Disconnect existing WebSocket if any
+    _wsService?.disconnect();
+
     // Fetch existing messages
     await fetchMessages(roomId);
 
-    // Connect to WebSocket
+    // Connect to WebSocket using service
     _connectWebSocket(roomId);
+
+    // Scroll to bottom after loading messages
+    Future.delayed(const Duration(milliseconds: 500), () => scrollToBottom());
   }
 
   // Fetch messages from the API
@@ -51,6 +86,9 @@ class ChatController extends GetxController {
       if (response['statusCode'] == 200) {
         final List<dynamic> messageData = response['data'];
         messages.assignAll(messageData.cast<Map<String, dynamic>>());
+
+        // Scroll to bottom after fetching messages
+        Future.delayed(const Duration(milliseconds: 300), () => scrollToBottom());
       } else {
         showCustomSnackBar(
             title: 'Error',
@@ -70,96 +108,85 @@ class ChatController extends GetxController {
     }
   }
 
-  // Connect to WebSocket
+  // Connect to WebSocket using service
   void _connectWebSocket(int roomId) {
-    // Close existing connection if any
-    channel?.sink.close();
-
     final token = authController.accessToken.value;
-    final url = 'wss://circle-oxygen-verification-postal.trycloudflare.com/users/chat/$roomId/?token=$token';
 
-    debugPrint('Connecting to WebSocket: $url');
+    _wsService = WebSocketService(token);
 
+    _wsService!.connect(
+      roomId,
+      onMessage: (data) {
+        _handleWebSocketMessage(data, roomId);
+      },
+      onError: (error) {
+        debugPrint("WebSocket Error: $error");
+        showCustomSnackBar(
+          title: 'Connection Error',
+          message: 'Lost connection to chat',
+          isSuccess: false,
+        );
+      },
+      onDone: () {
+        debugPrint("WebSocket connection closed");
+      },
+    );
+  }
+
+  // Handle incoming WebSocket messages
+  void _handleWebSocketMessage(Map<String, dynamic> data, int roomId) {
     try {
-      channel = WebSocketChannel.connect(Uri.parse(url));
+      // Handle different message types
+      if (data.containsKey('typing')) {
+        // Handle typing indicator
+        final senderUsername = data['sender'] ?? '';
+        final currentUsername = profileController.userName.value;
 
-      // Listen for messages from WebSocket
-      channel!.stream.listen(
-            (data) {
-          debugPrint('WebSocket received: $data');
-          try {
-            final decodedData = jsonDecode(data);
+        if (senderUsername != currentUsername) {
+          isTyping.value = data['typing'] ?? false;
+        }
+        return;
+      }
 
-            // Handle the WebSocket response format
-            if (decodedData is Map<String, dynamic>) {
-              // Create a message object matching the API format
-              final newMessage = {
-                'id': DateTime.now().millisecondsSinceEpoch, // Temporary ID
-                'room': roomId,
-                'sender': decodedData['sender'] ?? '',
-                'content': decodedData['message'] ?? '',
-                'timestamp': decodedData['timestamp'] ?? DateTime.now().toIso8601String(),
-                'is_read': false,
-              };
+      // Handle regular messages (text, image, file)
+      final newMessage = {
+        'id': data['id'] ?? DateTime.now().millisecondsSinceEpoch,
+        'room': roomId,
+        'sender': data['sender'] ?? '',
+        'content': data['message'] ?? '',
+        'file': data['file'],
+        'file_name': data['file_name'],
+        'file_type': data['file_type'],
+        'image': data['image'],
+        'timestamp': data['timestamp'] ?? DateTime.now().toIso8601String(),
+        'is_read': false,
+      };
 
-              // Add to messages list
-              messages.add(newMessage);
-            }
-          } catch (e) {
-            debugPrint('Error parsing WebSocket message: $e');
-          }
-        },
-        onError: (error) {
-          debugPrint("WebSocket Error: $error");
-          showCustomSnackBar(
-            title: 'Connection Error',
-            message: 'Lost connection to chat',
-            isSuccess: false,
-          );
-        },
-        onDone: () {
-          debugPrint("WebSocket connection closed");
-        },
-      );
+      // Add to messages list
+      messages.add(newMessage);
+
+      // Scroll to bottom when new message arrives
+      Future.delayed(const Duration(milliseconds: 100), () => scrollToBottom());
     } catch (e) {
-      debugPrint('Error connecting to WebSocket: $e');
-      showCustomSnackBar(
-        title: 'Connection Error',
-        message: 'Failed to connect to chat',
-        isSuccess: false,
-      );
+      debugPrint('Error handling WebSocket message: $e');
     }
   }
 
-  // Send message through WebSocket
+  // Send text message
   void sendMessage() {
-    if (message.value.trim().isEmpty || channel == null || currentRoomId == null) {
+    if (message.value.trim().isEmpty || _wsService == null || !_wsService!.isConnected) {
+      debugPrint('Cannot send message - no content or not connected');
       return;
     }
 
-    final messageContent = {
-      'message': message.value.trim(), // Note: API expects 'message' not 'content'
-    };
-
     try {
-      // Send message to WebSocket
-      channel!.sink.add(jsonEncode(messageContent));
-      debugPrint('Sent message: ${jsonEncode(messageContent)}');
-
-      // Add message to local list immediately for better UX
-      final localMessage = {
-        'id': DateTime.now().millisecondsSinceEpoch,
-        'room': currentRoomId,
-        'sender': profileController.userName.value,
-        'content': message.value.trim(),
-        'timestamp': DateTime.now().toIso8601String(),
-        'is_read': false,
-      };
-      messages.add(localMessage);
+      _wsService!.sendMessage(message.value.trim());
 
       // Clear message field
       message.value = '';
       textController.clear();
+
+      debugPrint('Message sent successfully');
     } catch (e) {
       debugPrint('Error sending message: $e');
       showCustomSnackBar(
@@ -170,17 +197,145 @@ class ChatController extends GetxController {
     }
   }
 
+  // Send image
+  Future<void> sendImage({ImageSource source = ImageSource.gallery, required File file}) async {
+    if (_wsService == null || !_wsService!.isConnected) {
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Not connected to chat',
+        isSuccess: false,
+      );
+      return;
+    }
+
+    try {
+      final XFile? image = await _picker.pickImage(source: source);
+      if (image == null) return;
+
+      isFileUploading(true);
+
+      final Uint8List bytes = await image.readAsBytes();
+      final fileName = image.name;
+
+      _wsService!.sendImage(
+        bytes,
+        fileName: fileName,
+        caption: message.value.trim().isNotEmpty ? message.value.trim() : null,
+      );
+
+      // Clear caption if any
+      if (message.value.trim().isNotEmpty) {
+        message.value = '';
+        textController.clear();
+      }
+
+      debugPrint('Image sent: $fileName');
+
+    } catch (e) {
+      debugPrint('Error sending image: $e');
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Failed to send image',
+        isSuccess: false,
+      );
+    } finally {
+      isFileUploading(false);
+    }
+  }
+
+  // Send file (for future use)
+  Future<void> sendFile(File file) async {
+    if (_wsService == null || !_wsService!.isConnected) {
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Not connected to chat',
+        isSuccess: false,
+      );
+      return;
+    }
+
+    try {
+      isFileUploading(true);
+
+      final Uint8List bytes = await file.readAsBytes();
+      final fileName = file.path.split('/').last;
+      final fileExtension = fileName.split('.').last.toLowerCase();
+
+      String fileType = 'file';
+      if (['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(fileExtension)) {
+        fileType = 'image';
+      } else if (['mp4', 'mov', 'avi', 'mkv'].contains(fileExtension)) {
+        fileType = 'video';
+      } else if (['pdf', 'doc', 'docx', 'txt'].contains(fileExtension)) {
+        fileType = 'document';
+      }
+
+      _wsService!.sendFile(
+        bytes,
+        fileName: fileName,
+        fileType: fileType,
+        caption: message.value.trim().isNotEmpty ? message.value.trim() : null,
+      );
+
+      // Clear caption if any
+      if (message.value.trim().isNotEmpty) {
+        message.value = '';
+        textController.clear();
+      }
+
+      debugPrint('File sent: $fileName');
+
+    } catch (e) {
+      debugPrint('Error sending file: $e');
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Failed to send file',
+        isSuccess: false,
+      );
+    } finally {
+      isFileUploading(false);
+    }
+  }
+
+  // Send typing status
+  void sendTypingStatus(bool typing) {
+    if (_wsService != null && _wsService!.isConnected) {
+      _wsService!.sendTypingStatus(typing);
+    }
+  }
+
+  // Handle text field changes
+  void onTextChanged(String value) {
+    message.value = value;
+
+    // Send typing indicator
+    if (value.isNotEmpty && !isTyping.value) {
+      sendTypingStatus(true);
+      isTyping.value = true;
+    } else if (value.isEmpty && isTyping.value) {
+      sendTypingStatus(false);
+      isTyping.value = false;
+    }
+
+    // Auto-scroll when typing
+    Future.delayed(const Duration(milliseconds: 100), () {
+      scrollToBottom();
+    });
+  }
+
   // Clean up when leaving chat
   void cleanupChat() {
-    channel?.sink.close();
-    channel = null;
+    _wsService?.disconnect();
+    _wsService = null;
     currentRoomId = null;
     messages.clear();
     textController.clear();
     message.value = '';
+    isTyping.value = false;
+    scrollController = null;
   }
 
-  /// Chat room state
+  /// Chat room state (existing code remains the same)
   final RxBool isRoomLoading = false.obs;
   final RxBool isRoomsLoading = false.obs;
   final RxString chatError = ''.obs;
@@ -303,6 +458,9 @@ class ChatController extends GetxController {
         } else {
           messages.clear();
         }
+
+        // Scroll to bottom after opening room
+        Future.delayed(const Duration(milliseconds: 300), () => scrollToBottom());
       } else {
         chatError.value = res['data']['error'] ?? 'Failed to open chat room';
         showCustomSnackBar(
@@ -356,7 +514,8 @@ class ChatController extends GetxController {
   @override
   void onClose() {
     textController.dispose();
-    channel?.sink.close();
+    _wsService?.disconnect();
+    scrollController = null;
     super.onClose();
   }
 

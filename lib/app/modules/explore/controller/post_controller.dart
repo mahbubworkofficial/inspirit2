@@ -7,6 +7,7 @@ import '../../auth/controllers/auth_controller.dart';
 
 class PostController extends GetxController {
   final ApiService apiService = ApiService();
+  late AuthController authController;
 
   var posts = <Map<String, dynamic>>[].obs;
   var postsCount = 0.obs;
@@ -18,11 +19,21 @@ class PostController extends GetxController {
   var isMoreCommentsLoading = false.obs;
   var commentsPage = 1.obs;
   RxBool hasText = false.obs;
+  final TextEditingController commentTextController = TextEditingController();
+  var isCommentsLoading = false.obs;
+  var commentsCount = 0.obs;
+  var hasMoreComments = false.obs;
+  final comments = <Map<String, dynamic>>[].obs;
+  final RxMap<int, bool> editingComment = <int, bool>{}.obs;
+  final isMoreLoading = false.obs;
+  final RxString currentCommentsPostId = ''.obs;
+  final RxBool isSendingComment = false.obs;
+  final RxMap<int, bool> likingComment = <int, bool>{}.obs;
+  final RxMap<int, bool> deletingComment = <int, bool>{}.obs;
+
   void onTextChanged(String value) {
     hasText.value = value.trim().isNotEmpty;
   }
-
-  late AuthController authController;
 
   @override
   void onInit() {
@@ -44,37 +55,17 @@ class PostController extends GetxController {
     }
     fetchPosts();
   }
-  final TextEditingController commentTextController = TextEditingController();
-  var isCommentsLoading = false.obs;
-  var commentsCount = 0.obs;
-
-  var hasMoreComments =
-      false.obs; // false since your endpoint returns full list
-  // ------- COMMENTS state mirroring your posts pattern -------
-  final comments = <Map<String, dynamic>>[].obs;
-
-  final RxMap<int, bool> editingComment = <int, bool>{}.obs;
-
- // If you already use isLoading for posts, rename these 4 to distinct ones: isCommentsLoading, etc.
-  final isMoreLoading = false.obs;
-// In PostController
-
-// Track which post's comments are currently loaded
-  final RxString currentCommentsPostId = ''.obs;
-  final RxBool isSendingComment = false.obs;
-
-
-  final RxMap<int, bool> likingComment = <int, bool>{}.obs;
-
-  final RxMap<int, bool> deletingComment = <int, bool>{}.obs;
-
 
   Future<void> editCommentByIndex(int commentIndex, String newText) async {
     if (commentIndex < 0 || commentIndex >= comments.length) return;
 
     final token = authController.accessToken.value;
     if (token.isEmpty) {
-      showCustomSnackBar(title: 'Error', message: 'Please log in', isSuccess: false);
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Please log in',
+        isSuccess: false,
+      );
       return;
     }
 
@@ -84,7 +75,11 @@ class PostController extends GetxController {
 
     final trimmed = newText.trim();
     if (trimmed.isEmpty) {
-      showCustomSnackBar(title: 'Error', message: 'Comment cannot be empty', isSuccess: false);
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Comment cannot be empty',
+        isSuccess: false,
+      );
       return;
     }
     if ((prev['text'] ?? '') == trimmed) {
@@ -104,10 +99,7 @@ class PostController extends GetxController {
       if (res['statusCode'] == 200 && res['data'] is Map<String, dynamic>) {
         final server = res['data'] as Map<String, dynamic>;
         // trust server payload
-        comments[commentIndex] = {
-          ...comments[commentIndex],
-          ...server,
-        };
+        comments[commentIndex] = {...comments[commentIndex], ...server};
       } else {
         // revert on failure
         comments[commentIndex] = prev;
@@ -120,13 +112,16 @@ class PostController extends GetxController {
     } catch (e, st) {
       debugPrint('editCommentByIndex error: $e\n$st');
       comments[commentIndex] = prev;
-      showCustomSnackBar(title: 'Error', message: 'Failed to update: $e', isSuccess: false);
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Failed to update: $e',
+        isSuccess: false,
+      );
     } finally {
       editingComment.remove(id);
     }
   }
 
-  /// Edit by id (finds index then delegates)
   Future<void> editCommentById(String commentId, String newText) async {
     final id = int.tryParse(commentId);
     if (id == null) return;
@@ -135,13 +130,16 @@ class PostController extends GetxController {
     await editCommentByIndex(idx, newText);
   }
 
-
   Future<void> deleteCommentByIndex(int commentIndex) async {
     if (commentIndex < 0 || commentIndex >= comments.length) return;
 
     final token = authController.accessToken.value;
     if (token.isEmpty) {
-      showCustomSnackBar(title: 'Error', message: 'Please log in', isSuccess: false);
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Please log in',
+        isSuccess: false,
+      );
       return;
     }
 
@@ -167,19 +165,26 @@ class PostController extends GetxController {
       }
     } catch (e) {
       comments.insert(commentIndex, toDelete);
-      showCustomSnackBar(title: 'Error', message: 'Failed to delete comment: $e', isSuccess: false);
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Failed to delete comment: $e',
+        isSuccess: false,
+      );
     } finally {
       deletingComment.remove(id);
     }
   }
-
 
   Future<void> toggleCommentLikeByIndex(int commentIndex) async {
     if (commentIndex < 0 || commentIndex >= comments.length) return;
 
     final token = authController.accessToken.value;
     if (token.isEmpty) {
-      showCustomSnackBar(title: 'Error', message: 'Please log in', isSuccess: false);
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Please log in',
+        isSuccess: false,
+      );
       return;
     }
 
@@ -190,28 +195,35 @@ class PostController extends GetxController {
     likingComment[id] = true;
 
     final bool wasLiked = (prev['is_liked'] ?? false) == true;
-    final int prevCount = (prev['react_count'] ?? 0) is int
-        ? prev['react_count']
-        : int.tryParse('${prev['react_count']}') ?? 0;
+    final int prevCount =
+        (prev['react_count'] ?? 0) is int
+            ? prev['react_count']
+            : int.tryParse('${prev['react_count']}') ?? 0;
 
     // optimistic
     final patched = Map<String, dynamic>.from(prev);
     patched['is_liked'] = !wasLiked;
-    patched['react_count'] = wasLiked ? (prevCount - 1).clamp(0, 1 << 30) : prevCount + 1;
+    patched['react_count'] =
+        wasLiked ? (prevCount - 1).clamp(0, 1 << 30) : prevCount + 1;
     comments[commentIndex] = patched;
 
     try {
-      final res = wasLiked
-          ? await apiService.unlikeComment(token, id.toString())
-          : await apiService.likeComment(token, id.toString());
+      final res =
+          wasLiked
+              ? await apiService.unlikeComment(token, id.toString())
+              : await apiService.likeComment(token, id.toString());
 
       if (res['statusCode'] == 200) {
         final server = res['data'];
         if (server is Map<String, dynamic>) {
           // reconcile if server sent back canonical values
           final merged = Map<String, dynamic>.from(comments[commentIndex]);
-          if (server.containsKey('is_liked')) merged['is_liked'] = server['is_liked'];
-          if (server.containsKey('react_count')) merged['react_count'] = server['react_count'];
+          if (server.containsKey('is_liked')) {
+            merged['is_liked'] = server['is_liked'];
+          }
+          if (server.containsKey('react_count')) {
+            merged['react_count'] = server['react_count'];
+          }
           comments[commentIndex] = merged;
         }
       } else {
@@ -226,7 +238,11 @@ class PostController extends GetxController {
     } catch (e, st) {
       debugPrint('toggleCommentLike error: $e\n$st');
       comments[commentIndex] = prev; // revert
-      showCustomSnackBar(title: 'Error', message: 'Failed to update like: $e', isSuccess: false);
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Failed to update like: $e',
+        isSuccess: false,
+      );
     } finally {
       likingComment.remove(id);
     }
@@ -235,7 +251,11 @@ class PostController extends GetxController {
   Future<void> submitComment(String postId) async {
     final token = authController.accessToken.value;
     if (token.isEmpty) {
-      showCustomSnackBar(title: 'Error', message: 'Please log in to comment', isSuccess: false);
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Please log in to comment',
+        isSuccess: false,
+      );
       Get.offAllNamed('/login');
       return;
     }
@@ -282,7 +302,6 @@ class PostController extends GetxController {
     }
   }
 
-// Call this when you open the comment screen for a post
   void openCommentsForPost(String postId, {bool force = false}) {
     if (!force && currentCommentsPostId.value == postId) return;
 
@@ -290,7 +309,7 @@ class PostController extends GetxController {
 
     // reset comments state
     page.value = 1;
-    hasMore.value = false;       // set true if your API supports pagination
+    hasMore.value = false; // set true if your API supports pagination
     comments.clear();
 
     // initial load
@@ -298,9 +317,10 @@ class PostController extends GetxController {
     fetchCommentsOnPost(postId);
   }
 
-
-  /// Fetch comments for a post (same pattern as your fetchPosts)
-  Future<void> fetchCommentsOnPost(String postId, {bool isLoadMore = false}) async {
+  Future<void> fetchCommentsOnPost(
+    String postId, {
+    bool isLoadMore = false,
+  }) async {
     if (authController.accessToken.value.isEmpty) {
       debugPrint('No auth token available');
       isLoading(false);
@@ -326,7 +346,9 @@ class PostController extends GetxController {
       comments.clear();
     }
 
-    debugPrint('Calling fetchCommentsOnPost with token: $token, postId: $postId, page: ${page.value}');
+    debugPrint(
+      'Calling fetchCommentsOnPost with token: $token, postId: $postId, page: ${page.value}',
+    );
     try {
       final response = await apiService.fetchCommentsOnPost(token, postId);
       debugPrint('fetchCommentsOnPost response: $response');
@@ -365,7 +387,6 @@ class PostController extends GetxController {
       isMoreLoading(false);
     }
   }
-
 
   Future<void> toggleLike(int postId, int index) async {
     final post = posts[index];
@@ -489,7 +510,6 @@ class PostController extends GetxController {
     }
   }
 
-  // Controller Function
   Future<void> fetchOthersPost({bool isLoadMore = false}) async {
     if (authController.accessToken.value.isEmpty) {
       debugPrint('No auth token available');

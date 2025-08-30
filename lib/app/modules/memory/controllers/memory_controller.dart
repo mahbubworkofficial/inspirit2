@@ -9,27 +9,60 @@ import '../../../../res/components/api_service.dart';
 import '../../../../widgets/show_custom_snack_ber.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../home/views/navbar.dart';
+import '../models/condolence.dart';
 import '../models/memory.dart';
 import '../models/person.dart';
 import '../views/memory_details_view.dart';
+import '../views/memory_history_view.dart';
 
 class MemoryController extends GetxController {
   final AuthController authController = Get.find<AuthController>();
   final ApiService apiService = ApiService();
 
   RxInt selectedIndex = (-1).obs;
-  RxString selectedeventtype = ''.obs;
+  RxString selectedEventType = ''.obs;
   var selectedRole = ''.obs;
   var personId = ''.obs;
   var memoryId = ''.obs;
-
+  var personsList = <Person>[].obs;
+  var hasMore = true.obs;
+  var personsListCount = 0.obs;
+  var page = 1.obs;
+  var memoriesList = <Memory>[].obs;
+  var memoriesListCount = 0.obs;
   final RxBool isLoading = false.obs;
   final RxBool isMoreLoading = false.obs;
   final RxString errorMessage = ''.obs;
-  // Reactive search query for AppBar TextField
   var searchQuery = ''.obs;
+  final titleController = TextEditingController();
+  final descriptionController = TextEditingController();
+  final dateController = TextEditingController();
+  final nameController = TextEditingController();
+  final dobController = TextEditingController();
+  final dodController = TextEditingController();
+  final detailsController = TextEditingController();
+  var whoCanSee = ''.obs;
+  Rxn<File> pickedImage = Rxn<File>();
+  RxList<String> imagePaths = <String>[].obs;
+  final RxString selectedTab = 'Memorial'.obs;
+  final RxString historySelectedTab = 'Memorial'.obs;
+  final count = 0.obs;
+  RxBool isFabVisible = true.obs;
+  RxBool isMemorialSelected = false.obs;
+  final condolenceTextController = TextEditingController();
+  var isSendingCondolence = false.obs;
+  var hasText = false.obs;
+  var condolencesCount = 0.obs;
+  var condolences = <Condolence>[].obs;
+  final int pageSize = 20;
+  var isFetching = false.obs;
+
   void _setLoading(bool v) {
     if (isLoading.value != v) isLoading.value = v;
+  }
+
+  void _setMoreLoading(bool value) {
+    if (isMoreLoading.value != value) isMoreLoading.value = value;
   }
 
   void _setError(String msg) {
@@ -42,20 +75,6 @@ class MemoryController extends GetxController {
     );
   }
 
-  final titleController = TextEditingController();
-  final descriptionController = TextEditingController();
-  final dateController = TextEditingController();
-
-  final nameController = TextEditingController();
-  final dobController = TextEditingController();
-  final dodController = TextEditingController();
-  final detailsController = TextEditingController();
-  var whoCanSee = ''.obs;
-  Rxn<File> pickedImage = Rxn<File>();
-
-  RxList<String> imagePaths = <String>[].obs;
-
-  // Pick image or video from gallery
   Future<void> pickVideoOrImageFromGallery() async {
     final picker = ImagePicker();
     final pickedFiles = await picker.pickMultiImage(); // 👈 multiple images
@@ -64,7 +83,7 @@ class MemoryController extends GetxController {
       for (var file in pickedFiles) {
         imagePaths.add(file.path); // add each image path
       }
-      ismemorialselected.value = false;
+      isMemorialSelected.value = false;
       showCustomSnackBar(
         title: 'Success',
         message: '${pickedFiles.length} image(s) added successfully',
@@ -79,7 +98,6 @@ class MemoryController extends GetxController {
     }
   }
 
-  // Remove image from the list
   void removeImage(int index) {
     if (index >= 0 && index < imagePaths.length) {
       imagePaths.removeAt(index);
@@ -91,13 +109,142 @@ class MemoryController extends GetxController {
     }
   }
 
-  var personsList = <Person>[].obs;
+  @override
+  void onInit() {
+    super.onInit();
+    condolenceTextController.addListener(() {
+      hasText.value = condolenceTextController.text.trim().isNotEmpty;
+    });
+    fetchCondolences();
+  }
+  Future<void> fetchCondolences({bool isLoadMore = false}) async {
+    if (isFetching.value) {
+      debugPrint('fetchCondolences: Already fetching, skipping');
+      return;
+    }
+    if (authController.accessToken.value.isEmpty) {
+      debugPrint('fetchCondolences: No auth token available');
+      _setLoading(false);
+      hasMore(false);
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Please log in to view condolences',
+        backgroundColor: AppColor.redColor,
+        isSuccess: false,
+      );
+      Get.offAllNamed('/login');
+      return;
+    }
 
-  var hasMore = true.obs;
-  var personsListCount = 0.obs;
-  var page = 1.obs;
-  var memoriesList = <Memory>[].obs;
-  var memoriesListCount = 0.obs;
+    final String token = authController.accessToken.value;
+
+    if (isLoadMore) {
+      if (!hasMore.value || isMoreLoading.value) {
+        debugPrint('fetchCondolences: No more data or already loading more');
+        return;
+      }
+      _setMoreLoading(true);
+      page.value += 1;
+    } else {
+      _setLoading(true);
+      page.value = 1;
+      condolences.clear();
+    }
+
+    isFetching.value = true;
+    debugPrint('fetchCondolences: Starting with token: $token, page: ${page.value}');
+
+    try {
+      final response = await apiService.fetchCondolences(token, page: page.value);
+      debugPrint('fetchCondolences response: $response');
+
+      if (response['statusCode'] == 200) {
+        final data = response['data'] as List<dynamic>;
+        if (data.isEmpty) {
+          hasMore(false);
+          debugPrint('fetchCondolences: No more condolences available');
+          condolencesCount.value++;
+        } else {
+          final newCondolences = data.map((json) => Condolence.fromJson(json)).toList();
+          // Deduplicate by id
+          final existingIds = condolences.map((c) => c.id).toSet();
+          final uniqueCondolences = newCondolences.where((c) => !existingIds.contains(c.id)).toList();
+          condolences.addAll(uniqueCondolences);
+          debugPrint('fetchCondolences: Added ${uniqueCondolences.length} new condolences, total: ${condolences.length}');
+        }
+      } else {
+        hasMore(false);
+        final errorMsg = response['data']['error'] ?? 'Failed to load condolences';
+        debugPrint('fetchCondolences Error: $errorMsg');
+        _setError(errorMsg);
+      }
+    } catch (e, stackTrace) {
+      debugPrint('fetchCondolences Exception: $e\n$stackTrace');
+      _setLoading(false);
+      hasMore(false);
+      _setError('Failed to load condolences: $e');
+    } finally {
+      _setLoading(false);
+      _setMoreLoading(false);
+      isFetching.value = false;
+    }
+  }
+
+  Future<void> submitCondolence() async {
+    final token = authController.accessToken.value;
+    if (token.isEmpty) {
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Please log in to submit a condolence',
+        backgroundColor: AppColor.redColor,
+        isSuccess: false,
+      );
+      Get.offAllNamed('/login');
+      return;
+    }
+
+    final text = condolenceTextController.text.trim();
+    if (text.isEmpty || isSendingCondolence.value) return;
+
+    isSendingCondolence.value = true;
+    try {
+      final response = await apiService.createCondolence(token, text);
+      if (response['statusCode'] == 200) {
+        final created = Condolence.fromJson(
+          response['data'] as Map<String, dynamic>,
+        );
+        condolences.insert(
+          0,
+          created,
+        ); // Insert at top for immediate visibility
+        condolenceTextController.clear();
+        hasText.value = false;
+        Get.to(MemoryHistoryView(), transition: Transition.leftToRightWithFade);
+        showCustomSnackBar(
+          title: 'Success',
+          message: 'Condolence submitted successfully!',
+          backgroundColor: AppColor.lightGreenColor,
+          isSuccess: true,
+        );
+      } else {
+        showCustomSnackBar(
+          title: 'Error',
+          message: response['data']['error'] ?? 'Failed to submit condolence',
+          backgroundColor: AppColor.redColor,
+          isSuccess: false,
+        );
+      }
+    } catch (e) {
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Failed to submit condolence: $e',
+        backgroundColor: AppColor.redColor,
+        isSuccess: false,
+      );
+    } finally {
+      isSendingCondolence.value = false;
+    }
+  }
 
   Future<void> fetchMemories({bool isLoadMore = false}) async {
     if (authController.accessToken.value.isEmpty) {
@@ -264,10 +411,6 @@ class MemoryController extends GetxController {
       _setLoading(false);
       _setMoreLoading(false);
     }
-  }
-
-  void _setMoreLoading(bool value) {
-    if (isMoreLoading.value != value) isMoreLoading.value = value;
   }
 
   Future<void> updatePerson() async {
@@ -503,49 +646,34 @@ class MemoryController extends GetxController {
     _setLoading(false);
   }
 
-  // Set selected role
   void setSelectedRole(String role) {
     selectedRole.value = role;
   }
 
   void selectOption(int index, String text) {
     selectedIndex.value = index;
-    selectedeventtype.value = text;
+    selectedEventType.value = text;
   }
 
-  // Update search query
   void updateSearchQuery(String value) {
     searchQuery.value = value;
   }
 
-  final RxString selectedTab = 'Memorial'.obs; // Default tab
+  void setHistorySelectedTab(String tab) {
+    historySelectedTab.value = tab;
+  }
 
   void setSelectedTab(String tab) {
     selectedTab.value = tab;
   }
 
-  final RxString hisrtorySelectedTab = 'Memorial'.obs; // Default tab
-
-  void setHistorySelectedTab(String tab) {
-    hisrtorySelectedTab.value = tab;
-  }
-
-  final count = 0.obs;
-
-  RxBool isFabVisible = true.obs;
-  // Reactive variable for memorial selection
-  RxBool ismemorialselected = false.obs; // Toggle FAB visibility
   void toggleFabVisibility() {
     isFabVisible.value = !isFabVisible.value;
   }
-  // Reactive list to store image paths
 
   @override
   void onClose() {
-    // Clean up resources (e.g., timers, streams)
+    condolenceTextController.dispose();
     super.onClose();
   }
-
-  // RxBool isselected=false.obs;
-  // var selectedreportype="".obs;
 }

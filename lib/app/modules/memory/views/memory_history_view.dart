@@ -86,7 +86,7 @@ class MemoryHistoryView extends GetView<MemoryController> {
                                         style: TextStyle(
                                           color:
                                               controller
-                                                          .hisrtorySelectedTab
+                                                          .historySelectedTab
                                                           .value ==
                                                       'Memorial'
                                                   ? AppColor.buttonColor
@@ -106,7 +106,7 @@ class MemoryHistoryView extends GetView<MemoryController> {
                                       decoration: BoxDecoration(
                                         color:
                                             controller
-                                                        .hisrtorySelectedTab
+                                                        .historySelectedTab
                                                         .value ==
                                                     'Memorial'
                                                 ? AppColor.buttonColor
@@ -139,7 +139,7 @@ class MemoryHistoryView extends GetView<MemoryController> {
                                         style: TextStyle(
                                           color:
                                               controller
-                                                          .hisrtorySelectedTab
+                                                          .historySelectedTab
                                                           .value ==
                                                       'Condolences'
                                                   ? AppColor.buttonColor
@@ -159,7 +159,7 @@ class MemoryHistoryView extends GetView<MemoryController> {
                                       decoration: BoxDecoration(
                                         color:
                                             controller
-                                                        .hisrtorySelectedTab
+                                                        .historySelectedTab
                                                         .value ==
                                                     'Condolences'
                                                 ? AppColor.buttonColor
@@ -191,7 +191,7 @@ class MemoryHistoryView extends GetView<MemoryController> {
                             index: [
                               'Memorial',
                               'Condolences',
-                            ].indexOf(controller.hisrtorySelectedTab.value),
+                            ].indexOf(controller.historySelectedTab.value),
                             children: [
                               MemoryHistoryListView(),
                               CondolencesHistoryListView(),

@@ -1,14 +1,11 @@
-
-
 import 'dart:io';
-import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-
+import 'package:intl/intl.dart';
 import '../../../../res/assets/image_assets.dart';
 import '../../../../res/colors/app_color.dart';
 import '../../home/views/report.dart';
@@ -38,46 +35,127 @@ class _PersonalChatState extends State<PersonalChat> {
   final ProfileController profileController = Get.put(ProfileController());
   final ImagePicker _picker = ImagePicker();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _textFocusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
-    // Initialize chat when screen opens
+
+    controller.setScrollController(_scrollController);
+
     if (widget.roomId != null) {
       controller.initializeChat(widget.roomId!);
     }
+
+    _textFocusNode.addListener(() {
+      if (_textFocusNode.hasFocus) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          controller.scrollToBottom();
+        });
+      }
+    });
+
+    ever(controller.messages, (messages) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        controller.scrollToBottom();
+      });
+    });
   }
 
   @override
   void dispose() {
-    // Clean up when leaving chat
     controller.cleanupChat();
     _scrollController.dispose();
+    _textFocusNode.dispose();
     super.dispose();
   }
 
   Future<void> _pickImage(ImageSource source) async {
-    final XFile? pickedFile = await _picker.pickImage(source: source);
-    if (pickedFile != null) {
-      controller.pickedImage.value = File(pickedFile.path);
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+      if (pickedFile != null) {
+        final file = File(pickedFile.path);
+        controller.pickedImage.value = file;
+        await controller.sendImage(file: file);
+      }
+    } catch (e) {
+      _showError('Failed to pick image: $e');
     }
   }
 
   Future<void> _pickVideoOrImageFromGallery() async {
-    final XFile? file = await _picker.pickImage(source: ImageSource.gallery);
-    if (file != null) {
-      controller.pickedImage.value = File(file.path);
+    try {
+      final XFile? file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+      if (file != null) {
+        final fileExtension = file.path.split('.').last.toLowerCase();
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(fileExtension)) {
+          final imageFile = File(file.path);
+          controller.pickedImage.value = imageFile;
+          await controller.sendImage(file: imageFile);
+        } else {
+          _showError('Unsupported file type');
+        }
+      }
+    } catch (e) {
+      _showError('Failed to pick media: $e');
     }
   }
 
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showFullImage(dynamic image) {
+    if (image == null) return;
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.black,
+        child: GestureDetector(
+          onTap: () => Get.back(),
+          child: Container(
+            width: double.infinity,
+            height: 0.8.sh,
+            child: image is File
+                ? Image.file(
+              image,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                Icons.error,
+                color: Colors.white,
+                size: 50,
+              ),
+            )
+                : CachedNetworkImage(
+              imageUrl: image,
+              fit: BoxFit.contain,
+              placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+              errorWidget: (context, url, error) => const Icon(
+                Icons.error,
+                color: Colors.white,
+                size: 50,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   String _formatTime(String? timestamp) {
@@ -109,14 +187,116 @@ class _PersonalChatState extends State<PersonalChat> {
     }
   }
 
+  Widget _buildMessageBubble(Map<String, dynamic> message, bool isMe) {
+    final content = message['content'] ?? '';
+    final timestamp = message['timestamp'] as String?;
+    final image = message['image'];
+    final hasImage = image != null && (image is String && image.isNotEmpty || image is File);
+
+    return GestureDetector(
+      onTap: hasImage ? () => _showFullImage(image) : null,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+        margin: EdgeInsets.only(
+          bottom: 8.h,
+          left: isMe ? 60.w : 0,
+          right: isMe ? 0 : 60.w,
+        ),
+        decoration: BoxDecoration(
+          color: isMe ? AppColor.vividBlue.withOpacity(0.2) : AppColor.softBeige,
+          borderRadius: BorderRadius.circular(12.r),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image content
+            if (hasImage) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8.r),
+                child: image is File
+                    ? Image.file(
+                  image,
+                  fit: BoxFit.cover,
+                  width: 200.w,
+                  height: 200.h,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 200.w,
+                    height: 200.h,
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.error),
+                  ),
+                )
+                    : CachedNetworkImage(
+                  imageUrl: image,
+                  fit: BoxFit.cover,
+                  width: 200.w,
+                  height: 200.h,
+                  placeholder: (context, url) => Container(
+                    width: 200.w,
+                    height: 200.h,
+                    color: Colors.grey[300],
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    width: 200.w,
+                    height: 200.h,
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.error),
+                  ),
+                ),
+              ),
+              if (content.isNotEmpty) SizedBox(height: 8.h),
+            ],
+            // Text content
+            if (content.isNotEmpty) ...[
+              SelectableText(
+                content,
+                style: TextStyle(
+                  fontSize: 16.sp,
+                  color: AppColor.textBlackColor,
+                  height: 1.3,
+                ),
+              ),
+              SizedBox(height: 4.h),
+            ],
+            // Timestamp
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  _formatTime(timestamp),
+                  style: TextStyle(
+                    fontSize: 11.sp,
+                    color: AppColor.textBlackColor.withOpacity(0.6),
+                  ),
+                ),
+                if (isMe) ...[
+                  SizedBox(width: 4.w),
+                  Icon(
+                    message['is_read'] == true ? Icons.done_all : Icons.done,
+                    size: 12.sp,
+                    color: message['is_read'] == true ? AppColor.vividBlue : AppColor.greyColor,
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUsername = profileController.userName.value;
-
-    // Auto-scroll when new messages arrive
-    controller.messages.listen((_) {
-      Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
-    });
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -180,9 +360,9 @@ class _PersonalChatState extends State<PersonalChat> {
                   : ['Mute', 'Clear Chat', 'Report User', 'Block User'],
               onSelected: (value) {
                 if (value == 'Report User') {
-                  Get.to(Report(), transition: Transition.rightToLeft);
+                  Get.to(() => const Report(), transition: Transition.rightToLeft);
                 } else if (value == 'Block User') {
-                  Get.to(BlockUser(), transition: Transition.rightToLeft);
+                  Get.to(() => const BlockUser(), transition: Transition.rightToLeft);
                 } else if (value == 'Unblock User') {
                   controller.isuserblocked.value = false;
                 }
@@ -193,14 +373,21 @@ class _PersonalChatState extends State<PersonalChat> {
       ),
       body: Column(
         children: [
-          // Messages List
+          Obx(() => controller.isMessageLoading.value
+              ? Container(
+            width: double.infinity,
+            color: Colors.blue[100],
+            padding: EdgeInsets.symmetric(vertical: 4.h),
+            child: Text(
+              'Loading messages...',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12.sp, color: Colors.blue[700]),
+            ),
+          )
+              : const SizedBox.shrink()),
           Expanded(
             child: Obx(() {
-              if (controller.isMessageLoading.value) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              if (controller.messages.isEmpty) {
+              if (controller.messages.isEmpty && !controller.isMessageLoading.value) {
                 return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -243,7 +430,6 @@ class _PersonalChatState extends State<PersonalChat> {
                   final timestamp = message['timestamp'] as String?;
                   final currentDate = _getDateHeader(timestamp);
 
-                  // Check if we need to show date header
                   bool showDateHeader = false;
                   if (currentDate != lastDate) {
                     showDateHeader = true;
@@ -252,7 +438,6 @@ class _PersonalChatState extends State<PersonalChat> {
 
                   return Column(
                     children: [
-                      // Date header
                       if (showDateHeader)
                         Padding(
                           padding: EdgeInsets.symmetric(vertical: 16.h),
@@ -274,47 +459,9 @@ class _PersonalChatState extends State<PersonalChat> {
                             ],
                           ),
                         ),
-
-                      // Message bubble
                       Align(
                         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                        child: Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 12.w,
-                            vertical: 8.h,
-                          ),
-                          margin: EdgeInsets.only(
-                            bottom: 8.h,
-                            left: isMe ? 60.w : 0,
-                            right: isMe ? 0 : 60.w,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isMe
-                                ? AppColor.vividBlue.withOpacity(0.2)
-                                : AppColor.softBeige,
-                            borderRadius: BorderRadius.circular(12.r),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                message['content'] ?? '',
-                                style: TextStyle(
-                                  fontSize: 16.sp,
-                                  color: AppColor.textBlackColor,
-                                ),
-                              ),
-                              SizedBox(height: 4.h),
-                              Text(
-                                _formatTime(timestamp),
-                                style: TextStyle(
-                                  fontSize: 11.sp,
-                                  color: AppColor.textBlackColor.withOpacity(0.6),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        child: _buildMessageBubble(message, isMe),
                       ),
                     ],
                   );
@@ -322,8 +469,6 @@ class _PersonalChatState extends State<PersonalChat> {
               );
             }),
           ),
-
-          // Input bar
           Obx(
                 () => controller.isuserblocked.value
                 ? Padding(
@@ -353,6 +498,13 @@ class _PersonalChatState extends State<PersonalChat> {
       decoration: BoxDecoration(
         color: AppColor.white3Color,
         borderRadius: BorderRadius.circular(30.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -378,9 +530,16 @@ class _PersonalChatState extends State<PersonalChat> {
           Expanded(
             child: TextField(
               controller: controller.textController,
-              onChanged: (value) => controller.message.value = value,
+              focusNode: _textFocusNode,
+              onChanged: (value) {
+                controller.message.value = value;
+                Future.delayed(const Duration(milliseconds: 100), () {
+                  controller.scrollToBottom();
+                });
+              },
               maxLines: null,
               keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
               decoration: InputDecoration(
                 hintText: 'Message...',
                 hintStyle: TextStyle(
@@ -423,7 +582,10 @@ class _PersonalChatState extends State<PersonalChat> {
                 : GestureDetector(
               onTap: () {
                 controller.sendMessage();
-                FocusScope.of(context).unfocus();
+                _textFocusNode.requestFocus();
+                Future.delayed(const Duration(milliseconds: 200), () {
+                  controller.scrollToBottom();
+                });
               },
               child: SvgPicture.asset(
                 ImageAssets.send,
