@@ -175,9 +175,8 @@ class Comment extends GetView<PostController> {
                                   index,
                                 );
                               },
-                              child: Obx(
-                                () => SvgPicture.asset(
-                                  ImageAssets.love,
+                              child:  SvgPicture.asset(
+                                  ImageAssets.candle1,
                                   width: 24.w,
                                   height: 24.h,
                                   colorFilter: ColorFilter.mode(
@@ -189,7 +188,6 @@ class Comment extends GetView<PostController> {
                                   ),
                                 ),
                               ),
-                            ),
                             SizedBox(width: 5.w),
                             // Like count wrapped with Obx to update reactively
                             SizedBox(

@@ -3,7 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../../../res/colors/app_color.dart';
-import '../../../../widgets/show_custom_snack_ber.dart';
+import '../../../../widgets/show_custom_snack_bar.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../auth/views/successfully_view.dart';
 

@@ -129,7 +129,7 @@ class _PersonalChatState extends State<PersonalChat> {
         backgroundColor: Colors.black,
         child: GestureDetector(
           onTap: () => Get.back(),
-          child: Container(
+          child: SizedBox(
             width: double.infinity,
             height: 0.8.sh,
             child: image is File

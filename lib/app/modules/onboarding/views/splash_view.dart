@@ -4,7 +4,7 @@ import 'package:get/get.dart';
 
 import '../../../../res/assets/image_assets.dart';
 import '../../../../res/colors/app_color.dart';
-import '../../../../widgets/show_custom_snack_ber.dart';
+import '../../../../widgets/show_custom_snack_bar.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../auth/views/create_profile_view.dart';
 import '../../home/views/navbar.dart';

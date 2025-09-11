@@ -241,8 +241,8 @@ class CommentsList extends GetView<PostController> {
                           child:
                               busy
                                   ? SizedBox(
-                                    width: 20,
-                                    height: 20,
+                                    width: 24.w,
+                                    height: 24.h,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
                                     ),

@@ -10,7 +10,7 @@ import '../../../../res/assets/image_assets.dart';
 import '../../../../res/colors/app_color.dart';
 import '../../../../res/components/api_service.dart';
 import '../../../../widgets/dialogue.dart';
-import '../../../../widgets/show_custom_snack_ber.dart';
+import '../../../../widgets/show_custom_snack_bar.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../home/views/navbar.dart';
 import '../models/event.dart';
@@ -22,8 +22,53 @@ class ExploreController extends GetxController {
   RxInt selectedIndex = (-1).obs;
   RxString selectedEventType = ''.obs;
   RxBool isEventSelected = false.obs;
-  // Reactive search query for AppBar TextField
   var searchQuery = ''.obs;
+  var isLoading = false.obs;
+  var isMoreLoading = false.obs;
+  var hasMore = true.obs;
+  var errorMessage = ''.obs;
+  var eventId = ''.obs;
+  var eventType = ''.obs;
+  var eventsList = <Event>[].obs;
+  var otherUserEvents = <Event>[].obs;
+  var eventsListCount = 0.obs;
+  var otherUserEventsCount = 0.obs;
+  var page = 1.obs;
+  var userId = ''.obs;
+  RxBool hasText = false.obs;
+
+  final titleController = TextEditingController();
+  final dateController = TextEditingController();
+  final timeController = TextEditingController();
+  final locationController = TextEditingController();
+  final descriptionController = TextEditingController();
+
+  RxList<String> imagePaths = <String>[].obs;
+
+  final RxString selectedTab = 'User'.obs;
+  final Rx<GoogleMapController?> mapController = Rx<GoogleMapController?>(null);
+  static const LatLng initialLocation = LatLng(40.735657, -73.996167);
+  final Set<Marker> markers = {
+    const Marker(
+      markerId: MarkerId('location'),
+      position: initialLocation,
+      infoWindow: InfoWindow(title: '47 W 13th St, New York'),
+    ),
+  };
+
+  void onMapCreated(GoogleMapController controller) {
+    debugPrint('Map created successfully'); // Debug log
+    mapController.value = controller;
+  }
+
+  void setSelectedTab(String tab) {
+    selectedTab.value = tab;
+  }
+
+  void onTextChanged(String value) {
+    hasText.value = value.trim().isNotEmpty;
+  }
+
   void _setLoading(bool v) {
     if (isLoading.value != v) isLoading.value = v;
   }
@@ -38,37 +83,25 @@ class ExploreController extends GetxController {
     showCustomSnackBar(
       title: 'Error',
       message: msg,
-      backgroundColor: AppColor.redColor,
       isSuccess: false,
     );
   }
-
-  var isLoading = false.obs;
-  var isMoreLoading = false.obs;
-  var hasMore = true.obs;
-  var errorMessage = ''.obs;
-  var eventId = ''.obs;
-  var eventType = ''.obs;
-  var eventsList = <Event>[].obs;
-  var otherUserEvents = <Event>[].obs;
-  var eventsListCount = 0.obs;
-  var otherUserEventsCount = 0.obs;
-  var page = 1.obs;
-  var userId = ''.obs;
 
   void _setMoreLoading(bool v) {
     if (isMoreLoading.value != v) isMoreLoading.value = v;
   }
 
-  final titleController = TextEditingController();
-  final dateController = TextEditingController();
-  final timeController = TextEditingController();
-  final locationController = TextEditingController();
-  final descriptionController = TextEditingController();
+  void removeImage(int index) {
+    if (index >= 0 && index < imagePaths.length) {
+      imagePaths.removeAt(index);
+      showCustomSnackBar(
+        title: 'Success',
+        message: 'Image removed successfully',
+        isSuccess: true,
+      );
+    }
+  }
 
-  RxList<String> imagePaths = <String>[].obs;
-
-  // Pick image or video from gallery
   Future<void> pickVideoOrImageFromGallery() async {
     final picker = ImagePicker();
     final pickedFiles = await picker.pickMultiImage(); // 👈 multiple images
@@ -92,18 +125,6 @@ class ExploreController extends GetxController {
     }
   }
 
-  // Remove image from the list
-  void removeImage(int index) {
-    if (index >= 0 && index < imagePaths.length) {
-      imagePaths.removeAt(index);
-      showCustomSnackBar(
-        title: 'Success',
-        message: 'Image removed successfully',
-        isSuccess: true,
-      );
-    }
-  }
-
   Future<void> fetchOtherUserEvents({bool isLoadMore = false}) async {
     if (authController.accessToken.value.isEmpty) {
       debugPrint('No auth token available');
@@ -119,6 +140,7 @@ class ExploreController extends GetxController {
     }
 
     final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
 
     if (isLoadMore) {
       if (!hasMore.value || isMoreLoading.value) return;
@@ -154,6 +176,43 @@ class ExploreController extends GetxController {
           );
           debugPrint('Events added: ${otherUserEvents.length}');
         }
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.fetchOtherUserEvents(
+            newToken!,
+            userId.value,
+            page.value,
+          );
+          debugPrint('Retry fetchOtherUserEvents response: $retryResponse');
+
+          if (retryResponse['statusCode'] == 200) {
+            final data = retryResponse['data'] as List<dynamic>;
+            if (data.isEmpty) {
+              hasMore(false);
+              debugPrint('No more events available');
+              otherUserEventsCount.value++;
+            } else {
+              otherUserEvents.addAll(
+                data.map((json) => Event.fromJson(json)).toList(),
+              );
+              debugPrint('Events added: ${otherUserEvents.length}');
+            }
+          } else {
+            hasMore(false);
+            final errorMsg =
+                retryResponse['data']['error'] ??
+                'Failed to load events after token refresh';
+            debugPrint('Retry fetchOtherUserEvents Error: $errorMsg');
+            _setError(errorMsg);
+            Get.offAllNamed('/login');
+          }
+        } else {
+          hasMore(false);
+          _setError('Failed to refresh token. Please log in again.');
+          Get.offAllNamed('/login');
+        }
       } else {
         hasMore(false);
         final errorMsg = response['data']['error'] ?? 'Failed to load events';
@@ -185,22 +244,49 @@ class ExploreController extends GetxController {
     }
 
     final String token = authController.accessToken.value;
-    _setLoading(true);
+    final String refresh = authController.refreshToken.value;
 
+    _setLoading(true);
     try {
       final response = await apiService.fetchEvents(token);
       debugPrint('fetchEvents response: $response');
 
       if (response['statusCode'] == 200) {
         final data = response['data'] as List<dynamic>;
-        eventsList.value = data.map((json) => Event.fromJson(json)).toList();
-        eventsListCount.value++;
+        eventsList.assignAll(data.map((json) => Event.fromJson(json)).toList());
+        eventsListCount.value = eventsList.length;
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.fetchEvents(newToken!);
+          debugPrint('Retry fetchEvents response: $retryResponse');
+
+          if (retryResponse['statusCode'] == 200) {
+            final data = retryResponse['data'] as List<dynamic>;
+            eventsList.assignAll(
+              data.map((json) => Event.fromJson(json)).toList(),
+            );
+            eventsListCount.value = eventsList.length;
+          } else {
+            final errorMsg =
+                retryResponse['data']['error'] ??
+                'Failed to load events after token refresh';
+            debugPrint('Retry fetchEvents Error: $errorMsg');
+            _setError(errorMsg);
+            Get.offAllNamed('/login');
+          }
+        } else {
+          _setError('Failed to refresh token. Please log in again.');
+          Get.offAllNamed('/login');
+        }
       } else {
         final errorMsg = response['data']['error'] ?? 'Failed to load events';
+        debugPrint('fetchEvents Error: $errorMsg');
         _setError(errorMsg);
       }
-    } catch (e, st) {
-      debugPrint('fetchEvents Exception: $e\n$st');
+    } catch (e, stackTrace) {
+      debugPrint('fetchEvents Exception: $e\n$stackTrace');
       _setError('Failed to load events: $e');
     } finally {
       _setLoading(false);
@@ -216,7 +302,7 @@ class ExploreController extends GetxController {
     final time = timeController.text.trim();
     final location = locationController.text.trim();
     final token = authController.accessToken.value;
-
+    final refresh = authController.refreshToken.value;
     _setLoading(true);
     final response = await apiService.updateEvent(
       id,
@@ -230,29 +316,30 @@ class ExploreController extends GetxController {
       token,
     );
 
-      if (response['statusCode'] == 200||response['statusCode'] == 200) {
+    if (response['statusCode'] == 200) {
       showCustomSnackBar(
         title: 'Success',
-        message: 'Memory posted successfully!',
+        message: 'Memory updated successfully!',
         isSuccess: true,
       );
-             Get.dialog( Dialog(
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                child: CenteredDialogWidget(
-                  title: 'Update Created',
-                  horizontalPadding: 2.0.w,
-                  verticalPadding: 20.0.h,
-                  subtitle:
-                      'Sed dignissim nisl a vehicula fringilla. Nulla faucibus dui tellus, ut dignissim',
-                  imageAsset: ImageAssets.postReport,
-                  backgroundColor: AppColor.backgroundColor,
-                  iconBackgroundColor: Colors.transparent,
-                  iconColor: AppColor.buttonColor,
-                  borderRadius: 30.0.r,
-                ),
-                           ),
-             );
+      Get.dialog(
+        Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: CenteredDialogWidget(
+            title: 'Update Created',
+            horizontalPadding: 2.0.w,
+            verticalPadding: 20.0.h,
+            subtitle:
+                'Sed dignissim nisl a vehicula fringilla. Nulla faucibus dui tellus, ut dignissim',
+            imageAsset: ImageAssets.postReport,
+            backgroundColor: AppColor.backgroundColor,
+            iconBackgroundColor: Colors.transparent,
+            iconColor: AppColor.buttonColor,
+            borderRadius: 30.0.r,
+          ),
+        ),
+      );
       Future.delayed(const Duration(seconds: 2), () {
         try {
           Get.off(() => Navigation(), transition: Transition.fadeIn);
@@ -260,16 +347,79 @@ class ExploreController extends GetxController {
           showCustomSnackBar(
             title: 'Navigation Error',
             message: 'Failed to navigate to Event screen: $e',
-            isSuccess: true,
+            isSuccess: false,
           );
         }
       });
+    } else if (response['statusCode'] == 401) {
+      final refreshed = await authController.refreshAccessToken(refresh);
+      if (refreshed) {
+        final newToken = await authController.getAccessToken();
+        final retryResponse = await apiService.updateEvent(
+          id,
+          type,
+          title,
+          dateOfMemory,
+          time,
+          location,
+          description,
+          imagePaths.map((path) => File(path)).toList(),
+          newToken!,
+        );
+
+        if (retryResponse['statusCode'] == 200) {
+          showCustomSnackBar(
+            title: 'Success',
+            message: 'Memory updated successfully!',
+            isSuccess: true,
+          );
+          Get.dialog(
+            Dialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              child: CenteredDialogWidget(
+                title: 'Update Created',
+                horizontalPadding: 2.0.w,
+                verticalPadding: 20.0.h,
+                subtitle:
+                    'Sed dignissim nisl a vehicula fringilla. Nulla faucibus dui tellus, ut dignissim',
+                imageAsset: ImageAssets.postReport,
+                backgroundColor: AppColor.backgroundColor,
+                iconBackgroundColor: Colors.transparent,
+                iconColor: AppColor.buttonColor,
+                borderRadius: 30.0.r,
+              ),
+            ),
+          );
+          Future.delayed(const Duration(seconds: 2), () {
+            try {
+              Get.off(() => Navigation(), transition: Transition.fadeIn);
+            } catch (e) {
+              showCustomSnackBar(
+                title: 'Navigation Error',
+                message: 'Failed to navigate to Event screen: $e',
+                isSuccess: false,
+              );
+            }
+          });
+        } else {
+          final errorMsg =
+              retryResponse['data']['error'] ??
+              'Failed to update event after token refresh';
+          _setError('Failed to Update Event: $errorMsg');
+          debugPrint('Retry Failed to Update Event: $errorMsg');
+          Get.offAllNamed('/login');
+        }
+      } else {
+        _setError('Failed to refresh token. Please log in again.');
+        Get.offAllNamed('/login');
+      }
     } else {
       final errorMsg =
           response['data']['error'] ??
           response['data']['detail'] ??
           'Unknown error';
-      _setError('Failed to Update Event: Re-try  Another Time');
+      _setError('Failed to Update Event: $errorMsg');
       debugPrint('Failed to Update Event: $errorMsg');
     }
     _setLoading(false);
@@ -281,89 +431,77 @@ class ExploreController extends GetxController {
     final description = descriptionController.text.trim();
     final dateOfMemory = dateController.text.trim(); // yyyy-mm-dd
     final token = authController.accessToken.value;
+    final refresh = authController.refreshToken.value;
     final time = timeController.text.trim();
     final location = locationController.text.trim();
 
     _setLoading(true);
-    final response = await apiService.createEvent(
-      type,
-      title,
-      dateOfMemory,
-      time,
-      location,
-      description,
-      imagePaths.map((path) => File(path)).toList(),
-      token,
-    );
-
-    if (response['statusCode'] == 201) {
-      showCustomSnackBar(
-        title: 'Success',
-        message: 'Memory posted successfully!',
-        isSuccess: true,
+    try {
+      final response = await apiService.createEvent(
+        type,
+        title,
+        dateOfMemory,
+        time,
+        location,
+        description,
+        imagePaths.map((path) => File(path)).toList(),
+        token,
       );
-      // Get.dialog(
-      //   Dialog(
-      //     backgroundColor: Colors.transparent,
-      //     elevation: 0,
-      //     child: CenteredDialogWidget(
-      //       title: 'Profile Updated',
-      //       horizontalPadding: 2.w,
-      //       verticalPadding: 20.h,
-      //       subtitle:
-      //       'Sed dignissim nisl a vehicula fringilla. Nulla faucibus dui tellus, ut dignissim',
-      //       imageAsset: ImageAssets.post_report,
-      //       backgroundColor: AppColor.backgroundColor,
-      //       iconBackgroundColor: Colors.transparent,
-      //       iconColor: AppColor.buttonColor,
-      //       borderRadius: 30.r,
-      //     ),
-      //   ),
-      // );
-      Get.off(() => Navigation(), transition: Transition.fadeIn);
-      // Future.delayed(const Duration(seconds: 2), () {
-      //   try {
-      //   } catch (e) {
-      //     showCustomSnackBar(
-      //       title: 'Navigation Error',
-      //       message: 'Failed to navigate to Event screen: $e',
-      //       isSuccess: false,
-      //     );
-      //   }
-      // });
-    } else {
-      final errorMsg =
-          response['data']['error'] ??
-          response['data']['detail'] ??
-          'Unknown error';
-      _setError('Failed to post memory: $errorMsg');
+
+      if (response['statusCode'] == 201) {
+        showCustomSnackBar(
+          title: 'Success',
+          message: 'Memory posted successfully!',
+          isSuccess: true,
+        );
+        Get.off(() => Navigation(), transition: Transition.fadeIn);
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.createEvent(
+            type,
+            title,
+            dateOfMemory,
+            time,
+            location,
+            description,
+            imagePaths.map((path) => File(path)).toList(),
+            newToken!,
+          );
+
+          if (retryResponse['statusCode'] == 201) {
+            showCustomSnackBar(
+              title: 'Success',
+              message: 'Memory posted successfully!',
+              isSuccess: true,
+            );
+            Get.off(() => Navigation(), transition: Transition.fadeIn);
+          } else {
+            final errorMsg =
+                retryResponse['data']['error'] ??
+                'Failed to post event after token refresh';
+            _setError('Failed to post memory: $errorMsg');
+            debugPrint('Retry Failed to post memory: $errorMsg');
+            Get.offAllNamed('/login');
+          }
+        } else {
+          _setError('Failed to refresh token. Please log in again.');
+          Get.offAllNamed('/login');
+        }
+      } else {
+        final errorMsg =
+            response['data']['error'] ??
+            response['data']['detail'] ??
+            'Unknown error';
+        _setError('Failed to post memory: $errorMsg');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('postEvent Exception: $e\n$stackTrace');
+      _setError('Failed to post memory: $e');
+    } finally {
+      _setLoading(false);
     }
-    _setLoading(false);
-  }
-
-  final Rx<GoogleMapController?> mapController = Rx<GoogleMapController?>(null);
-  static const LatLng initialLocation = LatLng(
-    40.735657,
-    -73.996167,
-  ); // 47 W 13th St, New York
-
-  final Set<Marker> markers = {
-    const Marker(
-      markerId: MarkerId('location'),
-      position: initialLocation,
-      infoWindow: InfoWindow(title: '47 W 13th St, New York'),
-    ),
-  };
-
-  @override
-  void onInit() {
-    super.onInit();
-    debugPrint('ExploreController initialized'); // Debug log
-  }
-
-  void onMapCreated(GoogleMapController controller) {
-    debugPrint('Map created successfully'); // Debug log
-    mapController.value = controller;
   }
 
   @override
@@ -371,21 +509,5 @@ class ExploreController extends GetxController {
     mapController.value?.dispose();
     debugPrint('Map controller disposed'); // Debug log
     super.onClose();
-  }
-
-  var currentIndex = 0.obs;
-  var isFabMenuOpen = false.obs;
-  RxBool isselected = false.obs;
-  var selectedreportype = "".obs;
-  Rxn<File> pickedImage = Rxn<File>();
-  RxBool hasText = false.obs;
-  final RxString selectedTab = 'User'.obs; // Default tab
-
-  void setSelectedTab(String tab) {
-    selectedTab.value = tab;
-  }
-
-  void onTextChanged(String value) {
-    hasText.value = value.trim().isNotEmpty;
   }
 }

@@ -1,13 +1,14 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
+
 import 'package:flutter/cupertino.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
+import 'package:web_socket_channel/web_socket_channel.dart';
+
+import '../../../../res/app_url/app_url.dart';
 
 class WebSocketService {
   WebSocketChannel? _channel;
-  final String baseUrl = 'wss://atmosphere-reservation-sorted-customs.trycloudflare.com/users/chat';
   final String token;
   bool _isConnected = false;
 
@@ -22,7 +23,7 @@ class WebSocketService {
     Function()? onDone,
   }) {
     try {
-      final uri = Uri.parse('$baseUrl/$roomId/?token=$token');
+      final uri = Uri.parse('${AppUrl.messagesUrl}/$roomId/?token=$token');
       debugPrint('Connecting to WebSocket: $uri');
 
       _channel = WebSocketChannel.connect(uri);

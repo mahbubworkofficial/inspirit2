@@ -1,13 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:jordyn/app/modules/auth/controllers/auth_controller.dart';
 import 'package:jordyn/res/app_url/app_url.dart';
 
-import '../../../../widgets/show_custom_snack_ber.dart';
+import '../../../../res/colors/app_color.dart';
+import '../../../../widgets/show_custom_snack_bar.dart';
 import '../views/family_member.dart';
 
 class FamilyTreeController extends GetxController {
@@ -52,7 +54,19 @@ class FamilyTreeController extends GetxController {
   }
 
   Future<void> _updateFamilyTreeImage(String memberId, File imageFile) async {
-    final token = authController.accessToken.value;
+    if (authController.accessToken.value.isEmpty) {
+      debugPrint('_updateFamilyTreeImage: No auth token available');
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Please log in to update family tree image.',
+        isSuccess: false,
+      );
+      Get.offAllNamed('/login');
+      return;
+    }
+
+    final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
     final url = Uri.parse(AppUrl.treeUrl);
 
     try {
@@ -70,35 +84,106 @@ class FamilyTreeController extends GetxController {
         ..fields['son1'] = familyMembers['son1']?.image.value ?? ''
         ..fields['son2'] = familyMembers['son2']?.image.value ?? '';
 
-      // Add the image file for the specific member
       request.files.add(await http.MultipartFile.fromPath(memberId, imageFile.path));
 
       final response = await request.send();
+      final responseData = await response.stream.bytesToString();
+      final data = jsonDecode(responseData);
 
       if (response.statusCode == 200) {
-        final responseData = await response.stream.bytesToString();
-        final data = jsonDecode(responseData);
-        // Update the image URL from the server response if provided
         if (data[memberId] != null) {
           familyMembers[memberId]?.image.value = data[memberId];
         }
-        showCustomSnackBar(title: 'Success', message: 'Image updated successfully!', isSuccess: true);
+        showCustomSnackBar(
+          title: 'Success',
+          message: 'Image updated successfully!',
+          isSuccess: true,
+        );
+      } else if (response.statusCode == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          var retryRequest = http.MultipartRequest('PATCH', url)
+            ..headers['Authorization'] = 'Bearer $newToken'
+            ..fields['me'] = '16'
+            ..fields['grandma1'] = familyMembers['grandma1']?.image.value ?? ''
+            ..fields['grandpa1'] = familyMembers['grandpa1']?.image.value ?? ''
+            ..fields['grandma2'] = familyMembers['grandma2']?.image.value ?? ''
+            ..fields['grandpa2'] = familyMembers['grandpa2']?.image.value ?? ''
+            ..fields['mom'] = familyMembers['mom']?.image.value ?? ''
+            ..fields['dad'] = familyMembers['dad']?.image.value ?? ''
+            ..fields['brother'] = familyMembers['brother']?.image.value ?? ''
+            ..fields['sister'] = familyMembers['sister']?.image.value ?? ''
+            ..fields['son1'] = familyMembers['son1']?.image.value ?? ''
+            ..fields['son2'] = familyMembers['son2']?.image.value ?? '';
+
+          retryRequest.files.add(await http.MultipartFile.fromPath(memberId, imageFile.path));
+
+          final retryResponse = await retryRequest.send();
+          final retryResponseData = await retryResponse.stream.bytesToString();
+          final retryData = jsonDecode(retryResponseData);
+
+          if (retryResponse.statusCode == 200) {
+            if (retryData[memberId] != null) {
+              familyMembers[memberId]?.image.value = retryData[memberId];
+            }
+            showCustomSnackBar(
+              title: 'Success',
+              message: 'Image updated successfully!',
+              backgroundColor: AppColor.lightGreenColor,
+              isSuccess: true,
+            );
+          } else {
+            final errorMsg = retryData['error'] ?? 'Failed to update image after token refresh';
+            debugPrint('_updateFamilyTreeImage Retry Error: $errorMsg');
+            showCustomSnackBar(
+              title: 'Error',
+              message: errorMsg,
+              isSuccess: false,
+            );
+            Get.offAllNamed('/login');
+          }
+        } else {
+          showCustomSnackBar(
+            title: 'Error',
+            message: 'Failed to refresh token. Please log in again.',
+            isSuccess: false,
+          );
+          Get.offAllNamed('/login');
+        }
       } else {
-        showCustomSnackBar(title: 'Error', message: 'Failed to update image.', isSuccess: false);
+        final errorMsg = data['error'] ?? 'Failed to update image';
+        debugPrint('_updateFamilyTreeImage Error: $errorMsg');
+        showCustomSnackBar(
+          title: 'Error',
+          message: errorMsg,
+          isSuccess: false,
+        );
       }
-    } catch (e) {
-      showCustomSnackBar(title: 'Error', message: 'An error occurred: $e', isSuccess: false);
+    } catch (e, stackTrace) {
+      debugPrint('_updateFamilyTreeImage Exception: $e\n$stackTrace');
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'An error occurred: $e',
+        isSuccess: false,
+      );
     }
   }
 
   Future<void> fetchFamilyTreeData() async {
-    final token = authController.accessToken.value;
-    if (token.isEmpty) {
-      showCustomSnackBar(title: 'Error', message: 'Please log in to view family tree.', isSuccess: false);
+    if (authController.accessToken.value.isEmpty) {
+      debugPrint('fetchFamilyTreeData: No auth token available');
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Please log in to view family tree.',
+        isSuccess: false,
+      );
       Get.offAllNamed('/login');
       return;
     }
 
+    final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
     final url = Uri.parse(AppUrl.treeUrl);
 
     try {
@@ -112,7 +197,6 @@ class FamilyTreeController extends GetxController {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // Update family members with image URLs from the server
         familyMembers['me']?.image.value = data['me'] is String ? data['me'] : null;
         familyMembers['grandpa1']?.image.value = data['grandpa1'] is String ? data['grandpa1'] : null;
         familyMembers['grandma1']?.image.value = data['grandma1'] is String ? data['grandma1'] : null;
@@ -124,12 +208,78 @@ class FamilyTreeController extends GetxController {
         familyMembers['sister']?.image.value = data['sister'] is String ? data['sister'] : null;
         familyMembers['son1']?.image.value = data['son1'] is String ? data['son1'] : null;
         familyMembers['son2']?.image.value = data['son2'] is String ? data['son2'] : null;
-        showCustomSnackBar(title: 'Success', message: 'Family tree data fetched successfully.', isSuccess: true);
+        showCustomSnackBar(
+          title: 'Success',
+          message: 'Family tree data fetched successfully.',
+          isSuccess: true,
+        );
+      } else if (response.statusCode == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await http.get(
+            url,
+            headers: {
+              'Authorization': 'Bearer $newToken',
+              'Content-Type': 'application/json',
+            },
+          );
+
+          if (retryResponse.statusCode == 200) {
+            final data = jsonDecode(retryResponse.body);
+            familyMembers['me']?.image.value = data['me'] is String ? data['me'] : null;
+            familyMembers['grandpa1']?.image.value = data['grandpa1'] is String ? data['grandpa1'] : null;
+            familyMembers['grandma1']?.image.value = data['grandma1'] is String ? data['grandma1'] : null;
+            familyMembers['grandma2']?.image.value = data['grandma2'] is String ? data['grandma2'] : null;
+            familyMembers['grandpa2']?.image.value = data['grandpa2'] is String ? data['grandpa2'] : null;
+            familyMembers['mom']?.image.value = data['mom'] is String ? data['mom'] : null;
+            familyMembers['dad']?.image.value = data['dad'] is String ? data['dad'] : null;
+            familyMembers['brother']?.image.value = data['brother'] is String ? data['brother'] : null;
+            familyMembers['sister']?.image.value = data['sister'] is String ? data['sister'] : null;
+            familyMembers['son1']?.image.value = data['son1'] is String ? data['son1'] : null;
+            familyMembers['son2']?.image.value = data['son2'] is String ? data['son2'] : null;
+            showCustomSnackBar(
+              title: 'Success',
+              message: 'Family tree data fetched successfully.',
+              backgroundColor: AppColor.lightGreenColor,
+              isSuccess: true,
+            );
+          } else {
+            final retryData = jsonDecode(retryResponse.body);
+            final errorMsg = retryData['error'] ?? 'Failed to fetch family tree data after token refresh';
+            debugPrint('fetchFamilyTreeData Retry Error: $errorMsg');
+            showCustomSnackBar(
+              title: 'Error',
+              message: errorMsg,
+              isSuccess: false,
+            );
+            Get.offAllNamed('/login');
+          }
+        } else {
+          showCustomSnackBar(
+            title: 'Error',
+            message: 'Failed to refresh token. Please log in again.',
+            isSuccess: false,
+          );
+          Get.offAllNamed('/login');
+        }
       } else {
-        showCustomSnackBar(title: 'Error', message: 'Failed to fetch family tree data.', isSuccess: false);
+        final data = jsonDecode(response.body);
+        final errorMsg = data['error'] ?? 'Failed to fetch family tree data';
+        debugPrint('fetchFamilyTreeData Error: $errorMsg');
+        showCustomSnackBar(
+          title: 'Error',
+          message: errorMsg,
+          isSuccess: false,
+        );
       }
-    } catch (e) {
-      showCustomSnackBar(title: 'Error', message: 'An error occurred: $e', isSuccess: false);
+    } catch (e, stackTrace) {
+      debugPrint('fetchFamilyTreeData Exception: $e\n$stackTrace');
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'An error occurred: $e',
+        isSuccess: false,
+      );
     }
   }
 }

@@ -171,7 +171,7 @@ class OtherUserPost extends GetView<ProfileController> {
                               debugPrint('Like tapped');
                             },
                             child: SvgPicture.asset(
-                              ImageAssets.love,
+                              ImageAssets.candle1,
                               width: 30.r,
                               height: 30.r,
                               colorFilter: ColorFilter.mode(

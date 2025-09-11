@@ -14,13 +14,13 @@ class PostView extends GetView<PostController> {
 
   @override
   Widget build(BuildContext context) {
-
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (controller.posts.isEmpty && !controller.isLoading.value) {
         controller.fetchPosts();
+        print('post _______________ ${controller.fetchPosts()}');
       }
     });
+
     return Obx(() {
       if (controller.isLoading.value) {
         return SizedBox(
@@ -28,7 +28,7 @@ class PostView extends GetView<PostController> {
           child: Column(
             children: List.generate(
               5,
-                  (index) => Shimmer.fromColors(
+              (index) => Shimmer.fromColors(
                 baseColor: AppColor.greyColor,
                 highlightColor: AppColor.grey100Color,
                 child: Container(
@@ -74,10 +74,12 @@ class PostView extends GetView<PostController> {
           children: [
             for (var index = 0; index < controller.posts.length; index++)
               GestureDetector(
-                onTap: (){Get.to(
-                      () => Comment(index),
-                  transition: Transition.rightToLeft,
-                );},
+                onTap: () {
+                  Get.to(
+                    () => Comment(index),
+                    transition: Transition.rightToLeft,
+                  );
+                },
                 child: Container(
                   width: double.infinity,
                   color: AppColor.backgroundColor,
@@ -90,19 +92,22 @@ class PostView extends GetView<PostController> {
                           radius: 25.r,
                           backgroundColor: AppColor.greyColor,
                           child: ClipOval(
-                            child: controller.posts[index]['user_profile_picture'] != null
-                                ? Image.network(
-                              controller.posts[index]['user_profile_picture'],
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
-                            )
-                                : Image.asset(
-                              ImageAssets.image,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
-                            ),
+                            child:
+                                controller.posts[index]['user_profile_picture'] !=
+                                        null
+                                    ? Image.network(
+                                      controller
+                                          .posts[index]['user_profile_picture'],
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                    )
+                                    : Image.asset(
+                                      ImageAssets.image,
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                    ),
                           ),
                         ),
                         title: Text(
@@ -114,10 +119,12 @@ class PostView extends GetView<PostController> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        subtitle: Row(spacing: 10.w,
+                        subtitle: Row(
+                          spacing: 10.w,
                           children: [
                             Text(
-                              controller.posts[index]['user_username'] ?? 'Unknown username',
+                              controller.posts[index]['user_username'] ??
+                                  'Unknown username',
                               style: TextStyle(
                                 color: AppColor.greyTone,
                                 fontSize: 12.sp,
@@ -126,7 +133,8 @@ class PostView extends GetView<PostController> {
                               ),
                             ),
                             Text(
-                              controller.posts[index]['created_at'] ?? 'Unknown time',
+                              controller.posts[index]['created_at'] ??
+                                  'Unknown time',
                               style: TextStyle(
                                 color: AppColor.greyTone,
                                 fontSize: 12.sp,
@@ -185,10 +193,13 @@ class PostView extends GetView<PostController> {
                           // ),
                           GestureDetector(
                             onTap: () {
-                              controller.toggleLike(controller.posts[index]['id'], index);
+                              controller.toggleLike(
+                                controller.posts[index]['id'],
+                                index,
+                              );
                             },
                             child: SvgPicture.asset(
-                              ImageAssets.love,
+                              ImageAssets.candle1,
                               width: 30.r,
                               height: 30.r,
                               colorFilter: ColorFilter.mode(
@@ -212,10 +223,11 @@ class PostView extends GetView<PostController> {
                           }),
                           SizedBox(width: 20.w),
                           GestureDetector(
-                            onTap: () => Get.to(
+                            onTap:
+                                () => Get.to(
                                   () => Comment(index),
-                              transition: Transition.rightToLeft,
-                            ),
+                                  transition: Transition.rightToLeft,
+                                ),
                             child: SvgPicture.asset(
                               ImageAssets.achieve,
                               width: 30.r,
@@ -242,7 +254,7 @@ class PostView extends GetView<PostController> {
                 ),
               ),
             if (controller.isMoreLoading.value)
-               Center(
+              Center(
                 child: Padding(
                   padding: EdgeInsets.all(16.sp),
                   child: CircularProgressIndicator(),
@@ -254,4 +266,3 @@ class PostView extends GetView<PostController> {
     });
   }
 }
-

@@ -177,7 +177,11 @@ class AddMembers extends StatelessWidget {
               child:
                   controller.isSelected(name)
                       ? Center(
-                        child: Icon(Icons.check, color: AppColor.whiteColor, size: 20.sp),
+                        child: Icon(
+                          Icons.check,
+                          color: AppColor.whiteColor,
+                          size: 20.sp,
+                        ),
                       )
                       : null,
             ),

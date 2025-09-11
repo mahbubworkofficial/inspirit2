@@ -1,9 +1,10 @@
 class AppUrl {
   static const String _baseUrl =
-      'https://atmosphere-reservation-sorted-customs.trycloudflare.com/api';
-  static const String imageUrl =
-      'https://transaction-allocation-licensing-conversion.trycloudflare.com';
+      'https://cowbird-central-crawdad.ngrok-free.app/api';
+  static const String _webSocketUrl =
+      'wss://cowbird-central-crawdad.ngrok-free.app/users';
   static const String loginUrl = '$_baseUrl/users/login/';
+  static const String refreshUrl = '$_baseUrl/users/token/refresh/';
   static const String setPassword = '$_baseUrl/users/password/reset/';
   static const String signUpWithOtherUrl = '$_baseUrl/users/social/login/';
   static const String signup = '$_baseUrl/users/register/';
@@ -32,6 +33,7 @@ class AppUrl {
   static const String eventUrl = '$_baseUrl/events/';
   static const String personUrl = '$_baseUrl/persons/';
   static const String chatUrl = '$_baseUrl/chat-rooms/';
+  static const String messagesUrl = '$_webSocketUrl/chat';
   static const String treeUrl = '$_baseUrl/family-tree/';
   static const String condolenceUrl = '$_baseUrl/condolences/';
 
@@ -45,8 +47,6 @@ class AppUrl {
   static const String profilesFilterUrl = '$_baseUrl/profiles/filter/';
   static const String getProfileByIdUrl = '$_baseUrl/user/profile';
   static const String deleteGalleryImageUrl = '$_baseUrl/user/delete-photos';
-  static const String dummyImageUrl =
-      '$imageUrl/media/user_images/profile_image/Image_3_LDElN57.jpg';
   // Chat endpoints
   static const String createChatRoomUrl = '$_baseUrl/chat/create/';
   static const String sendMessageUrl = '$_baseUrl/chat/room';

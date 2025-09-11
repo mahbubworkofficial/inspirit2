@@ -64,6 +64,7 @@ class ImageAssets {
   static const String photoVideos = 'assets/images/home/photo_videos.png';
   static const String settings = 'assets/images/explore/settings.png';
   static const String map1 = 'assets/images/explore/splash.png';
+  static const String candle1 = 'assets/icons/candle.svg';
 //=======
 
 //>>>>>>> bead9aafaa6c78e759e5e3a98ed9b768065247eb

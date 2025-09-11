@@ -10,7 +10,7 @@ import '../app/modules/home/views/navbar.dart';
 import '../app/modules/home/views/schedule.dart';
 import 'custom_button.dart';
 import 'dialogue.dart';
-import 'show_custom_snack_ber.dart';
+import 'show_custom_snack_bar.dart';
 
 void showDeleteConfirmationPopup({
   required BuildContext context,

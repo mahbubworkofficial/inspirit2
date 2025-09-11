@@ -8,7 +8,7 @@ import 'package:jordyn/app/modules/chat/controllers/web_socket_service.dart';
 
 import '../../../../res/app_url/app_url.dart';
 import '../../../../res/components/api_service.dart';
-import '../../../../widgets/show_custom_snack_ber.dart';
+import '../../../../widgets/show_custom_snack_bar.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../profile/controllers/profile_controller.dart';
 
@@ -17,31 +17,67 @@ class ChatController extends GetxController {
   final AuthController authController = Get.find<AuthController>();
   final ProfileController profileController = Get.put(ProfileController());
 
-  // WebSocket Service
   WebSocketService? _wsService;
 
-  // Messages for current chat room
   final RxList<Map<String, dynamic>> messages = <Map<String, dynamic>>[].obs;
   final RxString message = ''.obs;
   final RxBool isTyping = false.obs;
   final TextEditingController textController = TextEditingController();
   final RxBool isMessageLoading = false.obs;
-
-  // File handling
+  final RxBool isRoomLoading = false.obs;
+  final RxBool isRoomsLoading = false.obs;
+  final RxString chatError = ''.obs;
+  final RxString roomsError = ''.obs;
+  final RxnInt roomId = RxnInt();
+  final rooms = <Map<String, dynamic>>[].obs;
   final ImagePicker _picker = ImagePicker();
   final RxBool isFileUploading = false.obs;
 
-  // Add scroll controller reference
   ScrollController? scrollController;
 
   int? currentRoomId;
 
-  // Set scroll controller reference
-  void setScrollController(ScrollController controller) {
+
+  String makeAbsolutePhoto(String? path) {
+    if (path == null || path.isEmpty) return '';
+    if (path.startsWith('http')) return path;
+    final host = AppUrl.chatRoomsUrl;
+    final p = path.startsWith('/') ? path : '/$path';
+    final normalized = p.contains('/media/') ? p : '/media$p';
+    return '$host$normalized';
+  }
+
+  Map<String, dynamic>? firstParticipant(Map<String, dynamic> room) {
+    final parts = room['participants'];
+    if (parts is List && parts.isNotEmpty) {
+      final p = parts.first;
+      return (p is Map<String, dynamic>) ? p : null;
+    }
+    return null;
+  }
+
+  String roomTitle(Map<String, dynamic> room) {
+    final p = firstParticipant(room);
+    if (p == null) return 'Unknown';
+    return (p['name'] as String?)?.trim().isNotEmpty == true
+        ? p['name']
+        : ((p['username'] as String?)?.trim().isNotEmpty == true
+        ? p['username']
+        : 'User #${p['id']}');
+  }
+
+  String? roomAvatar(Map<String, dynamic> room) {
+    final p = firstParticipant(room);
+    return p?['profile_photo'] as String?;
+  }
+
+  String lastMessageText(Map<String, dynamic> room) {
+    final lm = room['last_message'];
+    return (lm is String && lm.trim().isNotEmpty) ? lm : 'No messages yet';
+  }void setScrollController(ScrollController controller) {
     scrollController = controller;
   }
 
-  // Scroll to bottom method
   void scrollToBottom({bool animate = true}) {
     if (scrollController?.hasClients == true) {
       if (animate) {
@@ -56,59 +92,6 @@ class ChatController extends GetxController {
     }
   }
 
-  // Initialize chat for a specific room
-  Future<void> initializeChat(int roomId) async {
-    currentRoomId = roomId;
-    messages.clear(); // Clear previous messages
-
-    // Disconnect existing WebSocket if any
-    _wsService?.disconnect();
-
-    // Fetch existing messages
-    await fetchMessages(roomId);
-
-    // Connect to WebSocket using service
-    _connectWebSocket(roomId);
-
-    // Scroll to bottom after loading messages
-    Future.delayed(const Duration(milliseconds: 500), () => scrollToBottom());
-  }
-
-  // Fetch messages from the API
-  Future<void> fetchMessages(int roomId) async {
-    final token = authController.accessToken.value;
-    isMessageLoading(true);
-
-    try {
-      final response = await apiService.fetchMessages(roomId.toString(), token);
-      debugPrint("Response from API: ${response['statusCode']}");
-
-      if (response['statusCode'] == 200) {
-        final List<dynamic> messageData = response['data'];
-        messages.assignAll(messageData.cast<Map<String, dynamic>>());
-
-        // Scroll to bottom after fetching messages
-        Future.delayed(const Duration(milliseconds: 300), () => scrollToBottom());
-      } else {
-        showCustomSnackBar(
-            title: 'Error',
-            message: response['data']['error'] ?? 'Failed to load messages',
-            isSuccess: false
-        );
-      }
-    } catch (e) {
-      debugPrint('Error fetching messages: $e');
-      showCustomSnackBar(
-          title: 'Error',
-          message: 'Failed to load messages',
-          isSuccess: false
-      );
-    } finally {
-      isMessageLoading(false);
-    }
-  }
-
-  // Connect to WebSocket using service
   void _connectWebSocket(int roomId) {
     final token = authController.accessToken.value;
 
@@ -133,7 +116,6 @@ class ChatController extends GetxController {
     );
   }
 
-  // Handle incoming WebSocket messages
   void _handleWebSocketMessage(Map<String, dynamic> data, int roomId) {
     try {
       // Handle different message types
@@ -172,9 +154,10 @@ class ChatController extends GetxController {
     }
   }
 
-  // Send text message
   void sendMessage() {
-    if (message.value.trim().isEmpty || _wsService == null || !_wsService!.isConnected) {
+    if (message.value.trim().isEmpty ||
+        _wsService == null ||
+        !_wsService!.isConnected) {
       debugPrint('Cannot send message - no content or not connected');
       return;
     }
@@ -195,10 +178,131 @@ class ChatController extends GetxController {
         isSuccess: false,
       );
     }
+  }  void sendTypingStatus(bool typing) {
+    if (_wsService != null && _wsService!.isConnected) {
+      _wsService!.sendTypingStatus(typing);
+    }
   }
 
-  // Send image
-  Future<void> sendImage({ImageSource source = ImageSource.gallery, required File file}) async {
+  void onTextChanged(String value) {
+    message.value = value;
+
+    // Send typing indicator
+    if (value.isNotEmpty && !isTyping.value) {
+      sendTypingStatus(true);
+      isTyping.value = true;
+    } else if (value.isEmpty && isTyping.value) {
+      sendTypingStatus(false);
+      isTyping.value = false;
+    }
+
+    // Auto-scroll when typing
+    Future.delayed(const Duration(milliseconds: 100), () {
+      scrollToBottom();
+    });
+  }
+
+  void cleanupChat() {
+    _wsService?.disconnect();
+    _wsService = null;
+    currentRoomId = null;
+    messages.clear();
+    textController.clear();
+    message.value = '';
+    isTyping.value = false;
+    scrollController = null;
+  }
+
+  Future<void> initializeChat(int roomId) async {
+    currentRoomId = roomId;
+    messages.clear(); // Clear previous messages
+
+    // Disconnect existing WebSocket if any
+    _wsService?.disconnect();
+
+    // Fetch existing messages
+    await fetchMessages(roomId);
+
+    // Connect to WebSocket using service
+    _connectWebSocket(roomId);
+
+    // Scroll to bottom after loading messages
+    Future.delayed(const Duration(milliseconds: 500), () => scrollToBottom());
+  }
+
+  Future<void> fetchMessages(int roomId) async {
+    final token = authController.accessToken.value;
+    final refresh = authController.refreshToken.value;
+    isMessageLoading(true);
+
+    try {
+      final response = await apiService.fetchMessages(roomId.toString(), token);
+      debugPrint("Response from API: ${response['statusCode']}");
+
+      if (response['statusCode'] == 200) {
+        final List<dynamic> messageData = response['data'];
+        messages.assignAll(messageData.cast<Map<String, dynamic>>());
+
+        // Scroll to bottom after fetching messages
+        Future.delayed(
+          const Duration(milliseconds: 300),
+              () => scrollToBottom(),
+        );
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.fetchMessages(roomId.toString(), newToken!);
+          debugPrint("Retry Response from API: ${retryResponse['statusCode']}");
+
+          if (retryResponse['statusCode'] == 200) {
+            final List<dynamic> messageData = retryResponse['data'];
+            messages.assignAll(messageData.cast<Map<String, dynamic>>());
+
+            Future.delayed(
+              const Duration(milliseconds: 300),
+                  () => scrollToBottom(),
+            );
+          } else {
+            final errorMsg = retryResponse['data']['error'] ?? 'Failed to load messages after token refresh';
+            showCustomSnackBar(
+              title: 'Error',
+              message: errorMsg,
+              isSuccess: false,
+            );
+            Get.offAllNamed('/login');
+          }
+        } else {
+          showCustomSnackBar(
+            title: 'Error',
+            message: 'Failed to refresh token. Please log in again.',
+            isSuccess: false,
+          );
+          Get.offAllNamed('/login');
+        }
+      } else {
+        showCustomSnackBar(
+          title: 'Error',
+          message: response['data']['error'] ?? 'Failed to load messages',
+          isSuccess: false,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error fetching messages: $e');
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Failed to load messages',
+        isSuccess: false,
+      );
+    } finally {
+      isMessageLoading(false);
+    }
+  }
+
+  Future<void> sendImage({
+    ImageSource source = ImageSource.gallery,
+    required File file,
+  }) async {
     if (_wsService == null || !_wsService!.isConnected) {
       showCustomSnackBar(
         title: 'Error',
@@ -230,7 +334,6 @@ class ChatController extends GetxController {
       }
 
       debugPrint('Image sent: $fileName');
-
     } catch (e) {
       debugPrint('Error sending image: $e');
       showCustomSnackBar(
@@ -243,7 +346,6 @@ class ChatController extends GetxController {
     }
   }
 
-  // Send file (for future use)
   Future<void> sendFile(File file) async {
     if (_wsService == null || !_wsService!.isConnected) {
       showCustomSnackBar(
@@ -284,7 +386,6 @@ class ChatController extends GetxController {
       }
 
       debugPrint('File sent: $fileName');
-
     } catch (e) {
       debugPrint('Error sending file: $e');
       showCustomSnackBar(
@@ -297,67 +398,18 @@ class ChatController extends GetxController {
     }
   }
 
-  // Send typing status
-  void sendTypingStatus(bool typing) {
-    if (_wsService != null && _wsService!.isConnected) {
-      _wsService!.sendTypingStatus(typing);
-    }
-  }
-
-  // Handle text field changes
-  void onTextChanged(String value) {
-    message.value = value;
-
-    // Send typing indicator
-    if (value.isNotEmpty && !isTyping.value) {
-      sendTypingStatus(true);
-      isTyping.value = true;
-    } else if (value.isEmpty && isTyping.value) {
-      sendTypingStatus(false);
-      isTyping.value = false;
-    }
-
-    // Auto-scroll when typing
-    Future.delayed(const Duration(milliseconds: 100), () {
-      scrollToBottom();
-    });
-  }
-
-  // Clean up when leaving chat
-  void cleanupChat() {
-    _wsService?.disconnect();
-    _wsService = null;
-    currentRoomId = null;
-    messages.clear();
-    textController.clear();
-    message.value = '';
-    isTyping.value = false;
-    scrollController = null;
-  }
-
-  /// Chat room state (existing code remains the same)
-  final RxBool isRoomLoading = false.obs;
-  final RxBool isRoomsLoading = false.obs;
-  final RxString chatError = ''.obs;
-  final RxString roomsError = ''.obs;
-  final RxnInt roomId = RxnInt();
-  final rooms = <Map<String, dynamic>>[].obs;
-
-  String makeAbsolutePhoto(String? path) {
-    if (path == null || path.isEmpty) return '';
-    if (path.startsWith('http')) return path;
-    final host = AppUrl.chatRoomsUrl;
-    final p = path.startsWith('/') ? path : '/$path';
-    final normalized = p.contains('/media/') ? p : '/media$p';
-    return '$host$normalized';
-  }
-
   Future<void> fetchRooms() async {
-    roomsError.value = '';
     final token = authController.accessToken.value;
+    final refresh = authController.refreshToken.value;
+    roomsError.value = '';
     if (token.isEmpty) {
       roomsError.value = 'Please log in to view chats';
-      showCustomSnackBar(title: 'Error', message: roomsError.value, isSuccess: false);
+      showCustomSnackBar(
+        title: 'Error',
+        message: roomsError.value,
+        isSuccess: false,
+      );
+      Get.offAllNamed('/login');
       return;
     }
 
@@ -377,46 +429,62 @@ class ChatController extends GetxController {
           }
         }
         rooms.assignAll(list);
+      } else if (res['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryRes = await apiService.fetchChatRooms(newToken!);
+          if (retryRes['statusCode'] == 200) {
+            final list = (retryRes['data'] as List).cast<Map<String, dynamic>>();
+            for (final room in list) {
+              if (room['participants'] is List) {
+                final parts = room['participants'] as List;
+                for (final p in parts) {
+                  if (p is Map && p['profile_photo'] is String) {
+                    p['profile_photo'] = makeAbsolutePhoto(p['profile_photo']);
+                  }
+                }
+              }
+            }
+            rooms.assignAll(list);
+          } else {
+            final errorMsg = retryRes['data']['error'] ?? 'Failed to load chat rooms after token refresh';
+            roomsError.value = errorMsg;
+            showCustomSnackBar(
+              title: 'Error',
+              message: errorMsg,
+              isSuccess: false,
+            );
+            Get.offAllNamed('/login');
+          }
+        } else {
+          roomsError.value = 'Failed to refresh token. Please log in again.';
+          showCustomSnackBar(
+            title: 'Error',
+            message: roomsError.value,
+            isSuccess: false,
+          );
+          Get.offAllNamed('/login');
+        }
       } else {
         roomsError.value = res['data']['error'] ?? 'Failed to load chat rooms';
-        showCustomSnackBar(title: 'Error', message: roomsError.value, isSuccess: false);
+        showCustomSnackBar(
+          title: 'Error',
+          message: roomsError.value,
+          isSuccess: false,
+        );
       }
     } catch (e, st) {
       debugPrint('fetchRooms error: $e\n$st');
       roomsError.value = 'Failed to load chat rooms: $e';
-      showCustomSnackBar(title: 'Error', message: roomsError.value, isSuccess: false);
+      showCustomSnackBar(
+        title: 'Error',
+        message: roomsError.value,
+        isSuccess: false,
+      );
     } finally {
       isRoomsLoading(false);
     }
-  }
-
-  Map<String, dynamic>? firstParticipant(Map<String, dynamic> room) {
-    final parts = room['participants'];
-    if (parts is List && parts.isNotEmpty) {
-      final p = parts.first;
-      return (p is Map<String, dynamic>) ? p : null;
-    }
-    return null;
-  }
-
-  String roomTitle(Map<String, dynamic> room) {
-    final p = firstParticipant(room);
-    if (p == null) return 'Unknown';
-    return (p['name'] as String?)?.trim().isNotEmpty == true
-        ? p['name']
-        : ((p['username'] as String?)?.trim().isNotEmpty == true
-        ? p['username']
-        : 'User #${p['id']}');
-  }
-
-  String? roomAvatar(Map<String, dynamic> room) {
-    final p = firstParticipant(room);
-    return p?['profile_photo'] as String?;
-  }
-
-  String lastMessageText(Map<String, dynamic> room) {
-    final lm = room['last_message'];
-    return (lm is String && lm.trim().isNotEmpty) ? lm : 'No messages yet';
   }
 
   Future<void> openWithParticipants(List<int> participants) async {
@@ -432,6 +500,7 @@ class ChatController extends GetxController {
     }
 
     final token = authController.accessToken.value;
+    final refresh = authController.refreshToken.value;
     if (token.isEmpty) {
       chatError.value = 'Please log in';
       showCustomSnackBar(
@@ -439,28 +508,57 @@ class ChatController extends GetxController {
         message: chatError.value,
         isSuccess: false,
       );
+      Get.offAllNamed('/login');
       return;
     }
 
     isRoomLoading(true);
     try {
-      final res = await apiService.createOrGetChatRoom(
-        token,
-        participants: participants,
-      );
+      final res = await apiService.createOrGetChatRoom(token, participants: participants);
       if (res['statusCode'] == 200) {
         final data = res['data'] as Map<String, dynamic>;
         roomId.value = (data['id'] as num).toInt();
         if (data['messages'] is List) {
-          messages.assignAll(
-            (data['messages'] as List).cast<Map<String, dynamic>>(),
-          );
+          messages.assignAll((data['messages'] as List).cast<Map<String, dynamic>>());
         } else {
           messages.clear();
         }
 
-        // Scroll to bottom after opening room
         Future.delayed(const Duration(milliseconds: 300), () => scrollToBottom());
+      } else if (res['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryRes = await apiService.createOrGetChatRoom(newToken!, participants: participants);
+          if (retryRes['statusCode'] == 200) {
+            final data = retryRes['data'] as Map<String, dynamic>;
+            roomId.value = (data['id'] as num).toInt();
+            if (data['messages'] is List) {
+              messages.assignAll((data['messages'] as List).cast<Map<String, dynamic>>());
+            } else {
+              messages.clear();
+            }
+
+            Future.delayed(const Duration(milliseconds: 300), () => scrollToBottom());
+          } else {
+            final errorMsg = retryRes['data']['error'] ?? 'Failed to open chat room after token refresh';
+            chatError.value = errorMsg;
+            showCustomSnackBar(
+              title: 'Error',
+              message: errorMsg,
+              isSuccess: false,
+            );
+            Get.offAllNamed('/login');
+          }
+        } else {
+          chatError.value = 'Failed to refresh token. Please log in again.';
+          showCustomSnackBar(
+            title: 'Error',
+            message: chatError.value,
+            isSuccess: false,
+          );
+          Get.offAllNamed('/login');
+        }
       } else {
         chatError.value = res['data']['error'] ?? 'Failed to open chat room';
         showCustomSnackBar(
@@ -490,7 +588,11 @@ class ChatController extends GetxController {
     await openWithParticipants(ids);
   }
 
-  // UI state variables
+
+
+
+
+
   RxBool isrequestsent = false.obs;
   RxString searchQuery = ''.obs;
   RxBool isuserblocked = false.obs;

@@ -6,7 +6,7 @@ import '../../../../res/assets/image_assets.dart';
 import '../../../../res/colors/app_color.dart';
 import '../../../../res/components/api_service.dart';
 import '../../../../widgets/dialogue.dart';
-import '../../../../widgets/show_custom_snack_ber.dart';
+import '../../../../widgets/show_custom_snack_bar.dart';
 import '../../auth/controllers/auth_controller.dart';
 
 class HomeController extends GetxController {
@@ -23,13 +23,13 @@ class HomeController extends GetxController {
   // Create post method
   Future<void> createPost() async {
     final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
 
     // Ensure content is not empty
     if (content.isEmpty) {
       showCustomSnackBar(
         title: 'Error',
         message: 'Content is required!',
-        backgroundColor: AppColor.redColor,
         isSuccess: false,
       );
       return;
@@ -46,12 +46,9 @@ class HomeController extends GetxController {
       );
 
       if (response['statusCode'] == 201) {
-        final message = response['data']['message'] ?? 'Post created successfully!';
-        showCustomSnackBar(
-          title: 'Success',
-          message: message,
-          isSuccess: true,
-        );
+        final message =
+            response['data']['message'] ?? 'Post created successfully!';
+        showCustomSnackBar(title: 'Success', message: message, isSuccess: true);
 
         // Show success dialog
         Get.dialog(
@@ -60,7 +57,8 @@ class HomeController extends GetxController {
             elevation: 0,
             child: CenteredDialogWidget(
               title: 'Post Reported',
-              subtitle: 'Sed dignissim nisl a vehicula fringilla. Nulla faucibus dui tellus, ut dignissim.',
+              subtitle:
+                  'Sed dignissim nisl a vehicula fringilla. Nulla faucibus dui tellus, ut dignissim.',
               imageAsset: ImageAssets.postReport,
               backgroundColor: AppColor.backgroundColor,
               iconBackgroundColor: Colors.transparent,
@@ -70,21 +68,77 @@ class HomeController extends GetxController {
           ),
         );
         content = ''.obs;
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.postCreate(
+            content: content.value,
+            image: pickedImage.value,
+            scheduledDate: scheduledDate.value,
+            scheduledTime: scheduledTime.value,
+            token: newToken!,
+          );
+
+          if (retryResponse['statusCode'] == 201) {
+            final message =
+                retryResponse['data']['message'] ??
+                'Post created successfully!';
+            showCustomSnackBar(
+              title: 'Success',
+              message: message,
+              isSuccess: true,
+            );
+
+            Get.dialog(
+              Dialog(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                child: CenteredDialogWidget(
+                  title: 'Post Reported',
+                  subtitle:
+                      'Sed dignissim nisl a vehicula fringilla. Nulla faucibus dui tellus, ut dignissim.',
+                  imageAsset: ImageAssets.postReport,
+                  backgroundColor: AppColor.backgroundColor,
+                  iconBackgroundColor: Colors.transparent,
+                  iconColor: AppColor.buttonColor,
+                  borderRadius: 30.0.r,
+                ),
+              ),
+            );
+            content = ''.obs;
+          } else {
+            final errorMsg =
+                retryResponse['data']['error'] ??
+                retryResponse['data']['message'] ??
+                'Post creation failed after token refresh';
+            showCustomSnackBar(
+              title: 'Error',
+              message: errorMsg,
+              isSuccess: false,
+            );
+            Get.offAllNamed('/login');
+          }
+        } else {
+          showCustomSnackBar(
+            title: 'Error',
+            message: 'Failed to refresh token. Please log in again.',
+            isSuccess: false,
+          );
+          Get.offAllNamed('/login');
+        }
       } else {
-        final errorMsg = response['data']['error'] ?? response['data']['message'] ?? 'Post creation failed';
-        showCustomSnackBar(
-          title: 'Error',
-          message: errorMsg,
-          backgroundColor: AppColor.redColor,
-          isSuccess: false,
-        );
+        final errorMsg =
+            response['data']['error'] ??
+            response['data']['message'] ??
+            'Post creation failed';
+        showCustomSnackBar(title: 'Error', message: errorMsg, isSuccess: false);
       }
     } catch (e) {
       debugPrint('Post creation error: $e');
       showCustomSnackBar(
         title: 'Error',
         message: 'Post creation failed: $e',
-        backgroundColor: AppColor.redColor,
         isSuccess: false,
       );
     } finally {
@@ -102,7 +156,6 @@ class HomeController extends GetxController {
   void toggleView(bool value) {
     showAll.value = value;
   }
+
   Rxn<File> pickedImageschedule = Rxn<File>();
-
-
 }

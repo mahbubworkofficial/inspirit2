@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../../res/components/api_service.dart';
-import '../../../../widgets/show_custom_snack_ber.dart';
+import '../../../../widgets/show_custom_snack_bar.dart';
 import '../../auth/controllers/auth_controller.dart';
 
 class PostController extends GetxController {
@@ -60,12 +60,14 @@ class PostController extends GetxController {
     if (commentIndex < 0 || commentIndex >= comments.length) return;
 
     final token = authController.accessToken.value;
+    final refresh = authController.refreshToken.value;
     if (token.isEmpty) {
       showCustomSnackBar(
         title: 'Error',
         message: 'Please log in',
         isSuccess: false,
       );
+      Get.offAllNamed('/login');
       return;
     }
 
@@ -100,6 +102,33 @@ class PostController extends GetxController {
         final server = res['data'] as Map<String, dynamic>;
         // trust server payload
         comments[commentIndex] = {...comments[commentIndex], ...server};
+      } else if (res['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryRes = await apiService.updateComment(newToken!, id.toString(), trimmed);
+
+          if (retryRes['statusCode'] == 200 && retryRes['data'] is Map<String, dynamic>) {
+            final server = retryRes['data'] as Map<String, dynamic>;
+            comments[commentIndex] = {...comments[commentIndex], ...server};
+          } else {
+            comments[commentIndex] = prev;
+            showCustomSnackBar(
+              title: 'Error',
+              message: retryRes['data']['error'] ?? 'Failed to update comment after token refresh',
+              isSuccess: false,
+            );
+            Get.offAllNamed('/login');
+          }
+        } else {
+          comments[commentIndex] = prev;
+          showCustomSnackBar(
+            title: 'Error',
+            message: 'Failed to refresh token. Please log in again.',
+            isSuccess: false,
+          );
+          Get.offAllNamed('/login');
+        }
       } else {
         // revert on failure
         comments[commentIndex] = prev;
@@ -134,12 +163,14 @@ class PostController extends GetxController {
     if (commentIndex < 0 || commentIndex >= comments.length) return;
 
     final token = authController.accessToken.value;
+    final refresh = authController.refreshToken.value;
     if (token.isEmpty) {
       showCustomSnackBar(
         title: 'Error',
         message: 'Please log in',
         isSuccess: false,
       );
+      Get.offAllNamed('/login');
       return;
     }
 
@@ -149,25 +180,67 @@ class PostController extends GetxController {
 
     deletingComment[id] = true;
 
-    // optimistic remove
+    // Optimistic deletion
     comments.removeAt(commentIndex);
+    commentsCount.value--;
 
     try {
       final res = await apiService.deleteComment(token, id.toString());
-      if (res['statusCode'] != 200) {
-        // revert on failure
+
+      if (res['statusCode'] == 200) {
+        showCustomSnackBar(
+          title: 'Success',
+          message: 'Comment deleted successfully',
+          isSuccess: true,
+        );
+      } else if (res['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryRes = await apiService.deleteComment(newToken!, id.toString());
+
+          if (retryRes['statusCode'] == 200) {
+            showCustomSnackBar(
+              title: 'Success',
+              message: 'Comment deleted successfully',
+              isSuccess: true,
+            );
+          } else {
+            comments.insert(commentIndex, toDelete);
+            commentsCount.value++;
+            showCustomSnackBar(
+              title: 'Error',
+              message: retryRes['data']['error'] ?? 'Failed to delete comment after token refresh',
+              isSuccess: false,
+            );
+            Get.offAllNamed('/login');
+          }
+        } else {
+          comments.insert(commentIndex, toDelete);
+          commentsCount.value++;
+          showCustomSnackBar(
+            title: 'Error',
+            message: 'Failed to refresh token. Please log in again.',
+            isSuccess: false,
+          );
+          Get.offAllNamed('/login');
+        }
+      } else {
         comments.insert(commentIndex, toDelete);
+        commentsCount.value++;
         showCustomSnackBar(
           title: 'Error',
           message: res['data']['error'] ?? 'Failed to delete comment',
           isSuccess: false,
         );
       }
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('deleteCommentByIndex error: $e\n$st');
       comments.insert(commentIndex, toDelete);
+      commentsCount.value++;
       showCustomSnackBar(
         title: 'Error',
-        message: 'Failed to delete comment: $e',
+        message: 'Failed to delete: $e',
         isSuccess: false,
       );
     } finally {
@@ -179,12 +252,14 @@ class PostController extends GetxController {
     if (commentIndex < 0 || commentIndex >= comments.length) return;
 
     final token = authController.accessToken.value;
+    final refresh = authController.refreshToken.value;
     if (token.isEmpty) {
       showCustomSnackBar(
         title: 'Error',
         message: 'Please log in',
         isSuccess: false,
       );
+      Get.offAllNamed('/login');
       return;
     }
 
@@ -196,22 +271,22 @@ class PostController extends GetxController {
 
     final bool wasLiked = (prev['is_liked'] ?? false) == true;
     final int prevCount =
-        (prev['react_count'] ?? 0) is int
-            ? prev['react_count']
-            : int.tryParse('${prev['react_count']}') ?? 0;
+    (prev['react_count'] ?? 0) is int
+        ? prev['react_count']
+        : int.tryParse('${prev['react_count']}') ?? 0;
 
     // optimistic
     final patched = Map<String, dynamic>.from(prev);
     patched['is_liked'] = !wasLiked;
     patched['react_count'] =
-        wasLiked ? (prevCount - 1).clamp(0, 1 << 30) : prevCount + 1;
+    wasLiked ? (prevCount - 1).clamp(0, 1 << 30) : prevCount + 1;
     comments[commentIndex] = patched;
 
     try {
       final res =
-          wasLiked
-              ? await apiService.unlikeComment(token, id.toString())
-              : await apiService.likeComment(token, id.toString());
+      wasLiked
+          ? await apiService.unlikeComment(token, id.toString())
+          : await apiService.likeComment(token, id.toString());
 
       if (res['statusCode'] == 200) {
         final server = res['data'];
@@ -226,8 +301,46 @@ class PostController extends GetxController {
           }
           comments[commentIndex] = merged;
         }
+      } else if (res['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryRes =
+          wasLiked
+              ? await apiService.unlikeComment(newToken!, id.toString())
+              : await apiService.likeComment(newToken!, id.toString());
+
+          if (retryRes['statusCode'] == 200) {
+            final server = retryRes['data'];
+            if (server is Map<String, dynamic>) {
+              final merged = Map<String, dynamic>.from(comments[commentIndex]);
+              if (server.containsKey('is_liked')) {
+                merged['is_liked'] = server['is_liked'];
+              }
+              if (server.containsKey('react_count')) {
+                merged['react_count'] = server['react_count'];
+              }
+              comments[commentIndex] = merged;
+            }
+          } else {
+            comments[commentIndex] = prev;
+            showCustomSnackBar(
+              title: 'Error',
+              message: retryRes['data']['error'] ?? 'Failed to update like after token refresh',
+              isSuccess: false,
+            );
+            Get.offAllNamed('/login');
+          }
+        } else {
+          comments[commentIndex] = prev;
+          showCustomSnackBar(
+            title: 'Error',
+            message: 'Failed to refresh token. Please log in again.',
+            isSuccess: false,
+          );
+          Get.offAllNamed('/login');
+        }
       } else {
-        // revert
         comments[commentIndex] = prev;
         showCustomSnackBar(
           title: 'Error',
@@ -250,6 +363,7 @@ class PostController extends GetxController {
 
   Future<void> submitComment(String postId) async {
     final token = authController.accessToken.value;
+    final refresh = authController.refreshToken.value;
     if (token.isEmpty) {
       showCustomSnackBar(
         title: 'Error',
@@ -284,6 +398,33 @@ class PostController extends GetxController {
         //   othersPost[idx] = updated;
         //   othersPost.refresh();
         // }
+      } else if (res['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryRes = await apiService.createCommentOnPost(newToken!, postId, text);
+
+          if (retryRes['statusCode'] == 200) {
+            final created = (retryRes['data'] as Map<String, dynamic>);
+            comments.insert(0, created);
+            commentTextController.clear();
+            hasText.value = false;
+          } else {
+            showCustomSnackBar(
+              title: 'Error',
+              message: retryRes['data']['error'] ?? 'Failed to create comment after token refresh',
+              isSuccess: false,
+            );
+            Get.offAllNamed('/login');
+          }
+        } else {
+          showCustomSnackBar(
+            title: 'Error',
+            message: 'Failed to refresh token. Please log in again.',
+            isSuccess: false,
+          );
+          Get.offAllNamed('/login');
+        }
       } else {
         showCustomSnackBar(
           title: 'Error',
@@ -318,9 +459,9 @@ class PostController extends GetxController {
   }
 
   Future<void> fetchCommentsOnPost(
-    String postId, {
-    bool isLoadMore = false,
-  }) async {
+      String postId, {
+        bool isLoadMore = false,
+      }) async {
     if (authController.accessToken.value.isEmpty) {
       debugPrint('No auth token available');
       isLoading(false);
@@ -335,6 +476,7 @@ class PostController extends GetxController {
     }
 
     final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
 
     if (isLoadMore) {
       if (!hasMore.value || isMoreLoading.value) return;
@@ -368,6 +510,41 @@ class PostController extends GetxController {
           // we should stop load-more after first fetch to avoid duplicates.
           hasMore(false);
         }
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.fetchCommentsOnPost(newToken!, postId);
+          debugPrint('Retry fetchCommentsOnPost response: $retryResponse');
+
+          if (retryResponse['statusCode'] == 200) {
+            final data = retryResponse['data'] as List<dynamic>;
+            if (data.isEmpty) {
+              hasMore(false);
+              debugPrint('No more comments available');
+              commentsCount++;
+            } else {
+              comments.addAll(data.cast<Map<String, dynamic>>());
+              comments.refresh();
+              debugPrint('Comments added: ${comments.length}');
+              hasMore(false);
+            }
+          } else {
+            hasMore(false);
+            final errorMsg = retryResponse['data']['error'] ?? 'Failed to load comments after token refresh';
+            debugPrint('Retry fetchCommentsOnPost Error: $errorMsg');
+            showCustomSnackBar(title: 'Error', message: errorMsg, isSuccess: false);
+            Get.offAllNamed('/login');
+          }
+        } else {
+          hasMore(false);
+          showCustomSnackBar(
+            title: 'Error',
+            message: 'Failed to refresh token. Please log in again.',
+            isSuccess: false,
+          );
+          Get.offAllNamed('/login');
+        }
       } else {
         hasMore(false);
         final errorMsg = response['data']['error'] ?? 'Failed to load comments';
@@ -388,6 +565,96 @@ class PostController extends GetxController {
     }
   }
 
+  // Future<void> toggleLike(int index) async {
+  //   if (index < 0 || index >= posts.length) return;
+  //
+  //   final token = authController.accessToken.value;
+  //   final refresh = authController.refreshToken.value;
+  //   if (token.isEmpty) {
+  //     showCustomSnackBar(
+  //       title: 'Error',
+  //       message: 'Please log in',
+  //       isSuccess: false,
+  //     );
+  //     Get.offAllNamed('/login');
+  //     return;
+  //   }
+  //
+  //   final post = Map<String, dynamic>.from(posts[index]);
+  //   final String postId = (post['id'] as num).toString();
+  //   final bool isLiked = post['is_liked'] ?? false;
+  //   final int reactCount = (post['react_count'] as num?)?.toInt() ?? 0;
+  //
+  //   // Optimistic update
+  //   final updatedPost = Map<String, dynamic>.from(post);
+  //   updatedPost['is_liked'] = !isLiked;
+  //   updatedPost['react_count'] = isLiked ? reactCount - 1 : reactCount + 1;
+  //   posts[index] = updatedPost;
+  //   posts.refresh();
+  //
+  //   try {
+  //     final response = await apiService.toggleLike(token, postId);
+  //
+  //     if (response['statusCode'] == 200) {
+  //       final serverData = response['data'] as Map<String, dynamic>;
+  //       final mergedPost = Map<String, dynamic>.from(posts[index]);
+  //       mergedPost['is_liked'] = serverData['is_liked'] ?? updatedPost['is_liked'];
+  //       mergedPost['react_count'] = serverData['react_count'] ?? updatedPost['react_count'];
+  //       posts[index] = mergedPost;
+  //       posts.refresh();
+  //     } else if (response['statusCode'] == 401) {
+  //       final refreshed = await authController.refreshAccessToken(refresh);
+  //       if (refreshed) {
+  //         final newToken = await authController.getAccessToken();
+  //         final retryResponse = await apiService.toggleLike(newToken!, postId);
+  //
+  //         if (retryResponse['statusCode'] == 200) {
+  //           final serverData = retryResponse['data'] as Map<String, dynamic>;
+  //           final mergedPost = Map<String, dynamic>.from(posts[index]);
+  //           mergedPost['is_liked'] = serverData['is_liked'] ?? updatedPost['is_liked'];
+  //           mergedPost['react_count'] = serverData['react_count'] ?? updatedPost['react_count'];
+  //           posts[index] = mergedPost;
+  //           posts.refresh();
+  //         } else {
+  //           posts[index] = post;
+  //           posts.refresh();
+  //           showCustomSnackBar(
+  //             title: 'Error',
+  //             message: retryResponse['data']['error'] ?? 'Failed to update like after token refresh',
+  //             isSuccess: false,
+  //           );
+  //           Get.offAllNamed('/login');
+  //         }
+  //       } else {
+  //         posts[index] = post;
+  //         posts.refresh();
+  //         showCustomSnackBar(
+  //           title: 'Error',
+  //           message: 'Failed to refresh token. Please log in again.',
+  //           isSuccess: false,
+  //         );
+  //         Get.offAllNamed('/login');
+  //       }
+  //     } else {
+  //       posts[index] = post;
+  //       posts.refresh();
+  //       showCustomSnackBar(
+  //         title: 'Error',
+  //         message: response['data']['error'] ?? 'Failed to update like',
+  //         isSuccess: false,
+  //       );
+  //     }
+  //   } catch (e, stackTrace) {
+  //     debugPrint('toggleLike Exception: $e\n$stackTrace');
+  //     posts[index] = post;
+  //     posts.refresh();
+  //     showCustomSnackBar(
+  //       title: 'Error',
+  //       message: 'Failed to update like: $e',
+  //       isSuccess: false,
+  //     );
+  //   }
+  // }
   Future<void> toggleLike(int postId, int index) async {
     final post = posts[index];
     final isLiked = post['is_liked'];
@@ -418,33 +685,153 @@ class PostController extends GetxController {
     }
   }
 
+  // Future<void> toggleOthersLike(int index) async {
+  //   if (index < 0 || index >= othersPost.length) return;
+  //
+  //   final token = authController.accessToken.value;
+  //   final refresh = authController.refreshToken.value;
+  //   if (token.isEmpty) {
+  //     showCustomSnackBar(
+  //       title: 'Error',
+  //       message: 'Please log in',
+  //       isSuccess: false,
+  //     );
+  //     Get.offAllNamed('/login');
+  //     return;
+  //   }
+  //
+  //   final post = Map<String, dynamic>.from(othersPost[index]);
+  //   final String postId = (post['id'] as num).toString();
+  //   final bool isLiked = post['is_liked'] ?? false;
+  //   final int reactCount = (post['react_count'] as num?)?.toInt() ?? 0;
+  //
+  //   // Optimistic update
+  //   final updatedPost = Map<String, dynamic>.from(post);
+  //   updatedPost['is_liked'] = !isLiked;
+  //   updatedPost['react_count'] = isLiked ? reactCount - 1 : reactCount + 1;
+  //   othersPost[index] = updatedPost;
+  //   othersPost.refresh();
+  //
+  //   try {
+  //     final response = await apiService.toggleLike(token, postId);
+  //
+  //     if (response['statusCode'] == 200) {
+  //       final serverData = response['data'] as Map<String, dynamic>;
+  //       final mergedPost = Map<String, dynamic>.from(othersPost[index]);
+  //       mergedPost['is_liked'] = serverData['is_liked'] ?? updatedPost['is_liked'];
+  //       mergedPost['react_count'] = serverData['react_count'] ?? updatedPost['react_count'];
+  //       othersPost[index] = mergedPost;
+  //       othersPost.refresh();
+  //     } else if (response['statusCode'] == 401) {
+  //       final refreshed = await authController.refreshAccessToken(refresh);
+  //       if (refreshed) {
+  //         final newToken = await authController.getAccessToken();
+  //         final retryResponse = await apiService.toggleLike(newToken!, postId);
+  //
+  //         if (retryResponse['statusCode'] == 200) {
+  //           final serverData = retryResponse['data'] as Map<String, dynamic>;
+  //           final mergedPost = Map<String, dynamic>.from(othersPost[index]);
+  //           mergedPost['is_liked'] = serverData['is_liked'] ?? updatedPost['is_liked'];
+  //           mergedPost['react_count'] = serverData['react_count'] ?? updatedPost['react_count'];
+  //           othersPost[index] = mergedPost;
+  //           othersPost.refresh();
+  //         } else {
+  //           othersPost[index] = post;
+  //           othersPost.refresh();
+  //           showCustomSnackBar(
+  //             title: 'Error',
+  //             message: retryResponse['data']['error'] ?? 'Failed to update like after token refresh',
+  //             isSuccess: false,
+  //           );
+  //           Get.offAllNamed('/login');
+  //         }
+  //       } else {
+  //         othersPost[index] = post;
+  //         othersPost.refresh();
+  //         showCustomSnackBar(
+  //           title: 'Error',
+  //           message: 'Failed to refresh token. Please log in again.',
+  //           isSuccess: false,
+  //         );
+  //         Get.offAllNamed('/login');
+  //       }
+  //     } else {
+  //       othersPost[index] = post;
+  //       othersPost.refresh();
+  //       showCustomSnackBar(
+  //         title: 'Error',
+  //         message: response['data']['error'] ?? 'Failed to update like',
+  //         isSuccess: false,
+  //       );
+  //     }
+  //   } catch (e, stackTrace) {
+  //     debugPrint('toggleOthersLike Exception: $e\n$stackTrace');
+  //     othersPost[index] = post;
+  //     othersPost.refresh();
+  //     showCustomSnackBar(
+  //       title: 'Error',
+  //       message: 'Failed to update like: $e',
+  //       isSuccess: false,
+  //     );
+  //   }
+  // }
   Future<void> toggleOthersLike(int postId, int index) async {
     final post = othersPost[index];
-    final isLiked = post['is_liked'];
+    final isLiked = post['is_liked'] ?? false;
     final token = authController.accessToken.value;
 
-    isLoading(true);
+    if (token.isEmpty) {
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Please log in to like posts',
+        isSuccess: false,
+      );
+      Get.offAllNamed('/login');
+      return;
+    }
+
+    // Optimistic update
+    final updatedPost = Map<String, dynamic>.from(post);
+    updatedPost['is_liked'] = !isLiked;
+    updatedPost['react_count'] =
+    isLiked ? (post['react_count'] ?? 0) - 1 : (post['react_count'] ?? 0) + 1;
+    othersPost[index] = updatedPost;
+    othersPost.refresh(); // Refresh the UI for this specific change
 
     try {
       final response = await apiService.toggleLike(postId, isLiked, token);
 
       if (response['statusCode'] == 200) {
-        // Successfully toggled the like state
         debugPrint('Like toggled successfully');
-        post['is_liked'] = !isLiked;
-        post['react_count'] =
-            isLiked ? post['react_count'] - 1 : post['react_count'] + 1;
-        posts[index] = Map.from(post); // Update the post in the list
-        posts.refresh(); // Refresh the UI
+        // Optionally, update with server data if additional fields are returned
+        if (response['data'] is Map<String, dynamic>) {
+          final serverData = response['data'] as Map<String, dynamic>;
+          final mergedPost = Map<String, dynamic>.from(othersPost[index]);
+          mergedPost['is_liked'] = serverData['is_liked'] ?? !isLiked;
+          mergedPost['react_count'] = serverData['react_count'] ?? updatedPost['react_count'];
+          othersPost[index] = mergedPost;
+          othersPost.refresh();
+        }
       } else {
-        // Handle error from API
-        Get.snackbar('Error', response['data']['error']);
+        // Revert on failure
+        othersPost[index] = post;
+        othersPost.refresh();
+        showCustomSnackBar(
+          title: 'Error',
+          message: response['data']['error'] ?? 'Failed to update like',
+          isSuccess: false,
+        );
       }
-    } catch (e) {
-      // Handle unexpected errors
-      Get.snackbar('Error', 'Failed to update like: $e');
-    } finally {
-      isLoading(false); // Stop loading
+    } catch (e, stackTrace) {
+      debugPrint('toggleOthersLike Exception: $e\n$stackTrace');
+      // Revert on error
+      othersPost[index] = post;
+      othersPost.refresh();
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Failed to update like: $e',
+        isSuccess: false,
+      );
     }
   }
 
@@ -463,6 +850,7 @@ class PostController extends GetxController {
     }
 
     final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
 
     if (isLoadMore) {
       if (!hasMore.value || isMoreLoading.value) return;
@@ -489,6 +877,40 @@ class PostController extends GetxController {
           posts.addAll(data.cast<Map<String, dynamic>>());
           posts.refresh();
           debugPrint('Posts added: ${posts.length}');
+        }
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.fetchPosts(newToken!);
+          debugPrint('Retry fetchPosts response: $retryResponse');
+
+          if (retryResponse['statusCode'] == 200) {
+            final data = retryResponse['data'] as List<dynamic>;
+            if (data.isEmpty) {
+              hasMore(false);
+              debugPrint('No more posts available');
+              postsCount++;
+            } else {
+              posts.addAll(data.cast<Map<String, dynamic>>());
+              posts.refresh();
+              debugPrint('Posts added: ${posts.length}');
+            }
+          } else {
+            hasMore(false);
+            final errorMsg = retryResponse['data']['error'] ?? 'Failed to load posts after token refresh';
+            debugPrint('Retry fetchPosts Error: $errorMsg');
+            showCustomSnackBar(title: 'Error', message: errorMsg, isSuccess: false);
+            Get.offAllNamed('/login');
+          }
+        } else {
+          hasMore(false);
+          showCustomSnackBar(
+            title: 'Error',
+            message: 'Failed to refresh token. Please log in again.',
+            isSuccess: false,
+          );
+          Get.offAllNamed('/login');
         }
       } else {
         hasMore(false);
@@ -525,6 +947,7 @@ class PostController extends GetxController {
     }
 
     final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
 
     if (isLoadMore) {
       if (!hasMore.value || isMoreLoading.value) return;
@@ -553,6 +976,40 @@ class PostController extends GetxController {
           othersPost.addAll(data.cast<Map<String, dynamic>>());
           othersPost.refresh();
           debugPrint('Posts added: ${othersPost.length}');
+        }
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.fetchOthersPost(newToken!);
+          debugPrint('Retry fetchOthersPost response: $retryResponse');
+
+          if (retryResponse['statusCode'] == 200) {
+            final data = retryResponse['data'] as List<dynamic>;
+            if (data.isEmpty) {
+              hasMore(false);
+              debugPrint('No more posts available');
+              othersPostCount++;
+            } else {
+              othersPost.addAll(data.cast<Map<String, dynamic>>());
+              othersPost.refresh();
+              debugPrint('Posts added: ${othersPost.length}');
+            }
+          } else {
+            hasMore(false);
+            final errorMsg = retryResponse['data']['error'] ?? 'Failed to load posts after token refresh';
+            debugPrint('Retry fetchOthersPost Error: $errorMsg');
+            showCustomSnackBar(title: 'Error', message: errorMsg, isSuccess: false);
+            Get.offAllNamed('/login');
+          }
+        } else {
+          hasMore(false);
+          showCustomSnackBar(
+            title: 'Error',
+            message: 'Failed to refresh token. Please log in again.',
+            isSuccess: false,
+          );
+          Get.offAllNamed('/login');
         }
       } else {
         hasMore(false);

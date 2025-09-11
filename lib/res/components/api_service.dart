@@ -6,14 +6,47 @@ import 'dart:convert';
 import 'package:get/get.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
-import '../../widgets/show_custom_snack_ber.dart';
+import '../../widgets/show_custom_snack_bar.dart';
 import '../app_url/app_url.dart';
 
 class ApiService extends GetxService {
   final http.Client client;
   ApiService({http.Client? client}) : client = client ?? http.Client();
 
-  Future<Map<String, dynamic>> fetchCondolences(String token, {int page = 1}) async {
+  Future<Map<String, dynamic>> uploadImage(
+    String roomId,
+    File file,
+    String token, {
+    String? caption,
+  }) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('${AppUrl.chatRoomsUrl}/chat/rooms/$roomId/messages/'),
+      );
+      request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(await http.MultipartFile.fromPath('file', file.path));
+      if (caption != null && caption.isNotEmpty) {
+        request.fields['message'] = caption;
+      }
+      final response = await request.send();
+      final responseData = await http.Response.fromStream(response);
+      return {
+        'statusCode': response.statusCode,
+        'data': jsonDecode(responseData.body),
+      };
+    } catch (e) {
+      return {
+        'statusCode': 500,
+        'data': {'error': 'Failed to upload image: $e'},
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> fetchCondolences(
+    String token, {
+    int page = 1,
+  }) async {
     final url = Uri.parse('${AppUrl.condolenceUrl}?page=$page');
 
     try {
@@ -33,11 +66,13 @@ class ApiService extends GetxService {
         List<dynamic> data = jsonDecode(response.body);
         return {'statusCode': 200, 'data': data};
       } else {
-        final errorData = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+        final errorData =
+            response.body.isNotEmpty ? jsonDecode(response.body) : {};
         return {
           'statusCode': response.statusCode,
           'data': {
-            'error': errorData['detail'] ??
+            'error':
+                errorData['detail'] ??
                 errorData['message'] ??
                 'Failed to load condolences',
           },
@@ -52,7 +87,10 @@ class ApiService extends GetxService {
     }
   }
 
-  Future<Map<String, dynamic>> createCondolence(String token, String message) async {
+  Future<Map<String, dynamic>> createCondolence(
+    String token,
+    String message,
+  ) async {
     final url = Uri.parse(AppUrl.condolenceUrl);
 
     try {
@@ -70,14 +108,17 @@ class ApiService extends GetxService {
       debugPrint('createCondolence Response: ${response.body}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final decoded = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+        final decoded =
+            response.body.isNotEmpty ? jsonDecode(response.body) : {};
         return {'statusCode': 200, 'data': decoded};
       } else {
-        final errorData = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+        final errorData =
+            response.body.isNotEmpty ? jsonDecode(response.body) : {};
         return {
           'statusCode': response.statusCode,
           'data': {
-            'error': errorData['detail'] ??
+            'error':
+                errorData['detail'] ??
                 errorData['message'] ??
                 'Failed to create condolence',
           },
@@ -169,6 +210,31 @@ class ApiService extends GetxService {
         'statusCode': 500,
         'data': {'error': e.toString()},
       };
+    }
+  }
+
+  Future<Map<String, dynamic>> refreshToken(String refreshToken) async {
+    try {
+      final response = await http.post(
+        Uri.parse(AppUrl.refreshUrl), // Your refresh token endpoint
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refresh': refreshToken}),
+      );
+      debugPrint(
+        'url _____________________ ${AppUrl.refreshUrl} _____________',
+      );
+      debugPrint(
+        "refresh token _____________________ $refreshToken _________________",
+      );
+      if (response.statusCode == 200) {
+        debugPrint("status______ ${response.statusCode}");
+        return {'statusCode': 200, 'data': jsonDecode(response.body)};
+      } else {
+        debugPrint("status______ ${response.statusCode}");
+        throw Exception('Failed to refresh token');
+      }
+    } catch (e) {
+      throw Exception('Error refreshing token: $e');
     }
   }
 
@@ -1649,16 +1715,16 @@ class ApiService extends GetxService {
   }
 
   Future<Map<String, dynamic>> createSubscription(
-    String planId,
-    String token,
-    String successUrl,
-    String cancelUrl,
-  ) async {
+      String planId,
+      String token,
+      String successUrl,
+      String cancelUrl,
+      ) async {
     try {
       final uri = Uri.parse(AppUrl.buySubscriptionUrl);
       final headers = {
         'Content-Type': 'application/json',
-        "Authorization": "Bearer $token",
+        'Authorization': 'Bearer $token',
       };
       final body = jsonEncode({
         'plan_id': planId,
@@ -1674,20 +1740,13 @@ class ApiService extends GetxService {
       debugPrint('Response status: ${response.statusCode}');
       debugPrint('Response body: ${response.body}');
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data;
-      } else if (response.statusCode == 401) {
-        throw Exception(
-          'Unauthorized: Invalid or missing authentication token',
-        );
-      } else {
-        throw Exception(
-          'Failed to create subscription: ${response.statusCode} - ${response.body}',
-        );
-      }
-    } catch (e) {
-      debugPrint('Error in createSubscription: $e');
+      final data = jsonDecode(response.body);
+      return {
+        'statusCode': response.statusCode,
+        'data': data,
+      };
+    } catch (e, stackTrace) {
+      debugPrint('Error in createSubscription: $e\n$stackTrace');
       showCustomSnackBar(
         title: 'Error',
         message: 'Failed to create subscription: $e',
@@ -2023,6 +2082,7 @@ class ApiService extends GetxService {
       final response = await http.Response.fromStream(streamedResponse);
       debugPrint('Response status: ${response.statusCode}');
       debugPrint('Response body: ${response.body}');
+
       final responseData =
           response.body.isNotEmpty ? jsonDecode(response.body) : {};
       return {'statusCode': response.statusCode, 'data': responseData};

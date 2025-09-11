@@ -8,7 +8,7 @@ import '../../../../res/assets/image_assets.dart';
 import '../../../../res/colors/app_color.dart';
 import '../../../../res/components/api_service.dart';
 import '../../../../widgets/dialogue.dart';
-import '../../../../widgets/show_custom_snack_ber.dart';
+import '../../../../widgets/show_custom_snack_bar.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../auth/views/link_social_view.dart';
 import '../../explore/models/friend.dart';
@@ -97,14 +97,25 @@ class ProfileController extends GetxController {
     showCustomSnackBar(
       title: 'Error',
       message: msg,
-      backgroundColor: AppColor.redColor,
       isSuccess: false,
     );
   }
 
+  void _setMoreLoading(bool v) {
+    if (isMoreLoading.value != v) isMoreLoading.value = v;
+  }
+
+  var hasMore = true.obs;
+  var isMoreLoading = false.obs;
+  var page = 1.obs;
+
+  void setAccountSelectedTab(String tab) => accountSelectedTab.value = tab;
+  void setSelectedTab(String tab) => selectedTab.value = tab;
+  void toggleSwitch(bool value) => isSwitched.value = value;
+
   Future<void> acceptFriendRequest(String requestId) async {
     if (authController.accessToken.value.isEmpty) {
-      debugPrint('No auth token available');
+      debugPrint('acceptFriendRequest: No auth token available');
       _setLoading(false);
       showCustomSnackBar(
         title: 'Error',
@@ -116,6 +127,7 @@ class ProfileController extends GetxController {
     }
 
     final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
     _setLoading(true);
 
     try {
@@ -123,22 +135,54 @@ class ProfileController extends GetxController {
       debugPrint('acceptFriendRequest response: $response');
 
       if (response['statusCode'] == 200 || response['statusCode'] == 204) {
-        // Optionally update friendsList to reflect accepted status
         friendsList.removeWhere((friend) => friend.id.toString() == requestId);
         showCustomSnackBar(
           title: 'Success',
           message: 'Friend request accepted successfully',
           isSuccess: true,
         );
-        // Optionally refresh friends list
         await fetchFriends();
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.acceptFriendRequest(
+            newToken!,
+            requestId,
+          );
+          debugPrint('Retry acceptFriendRequest response: $retryResponse');
+
+          if (retryResponse['statusCode'] == 200 ||
+              retryResponse['statusCode'] == 204) {
+            friendsList.removeWhere(
+              (friend) => friend.id.toString() == requestId,
+            );
+            showCustomSnackBar(
+              title: 'Success',
+              message: 'Friend request accepted successfully',
+              isSuccess: true,
+            );
+            await fetchFriends();
+          } else {
+            final errorMsg =
+                retryResponse['data']['error'] ??
+                'Failed to accept friend request after token refresh';
+            debugPrint('Retry acceptFriendRequest Error: $errorMsg');
+            _setError(errorMsg);
+            Get.offAllNamed('/login');
+          }
+        } else {
+          _setError('Failed to refresh token. Please log in again.');
+          Get.offAllNamed('/login');
+        }
       } else {
         final errorMsg =
             response['data']['error'] ?? 'Failed to accept friend request';
+        debugPrint('acceptFriendRequest Error: $errorMsg');
         _setError(errorMsg);
       }
-    } catch (e, st) {
-      debugPrint('acceptFriendRequest Exception: $e\n$st');
+    } catch (e, stackTrace) {
+      debugPrint('acceptFriendRequest Exception: $e\n$stackTrace');
       _setError('Failed to accept friend request: $e');
     } finally {
       _setLoading(false);
@@ -147,7 +191,7 @@ class ProfileController extends GetxController {
 
   Future<void> rejectFriendRequest(String requestId) async {
     if (authController.accessToken.value.isEmpty) {
-      debugPrint('No auth token available');
+      debugPrint('rejectFriendRequest: No auth token available');
       _setLoading(false);
       showCustomSnackBar(
         title: 'Error',
@@ -159,6 +203,7 @@ class ProfileController extends GetxController {
     }
 
     final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
     _setLoading(true);
 
     try {
@@ -172,13 +217,46 @@ class ProfileController extends GetxController {
           message: 'Friend request rejected successfully',
           isSuccess: true,
         );
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.rejectFriendRequest(
+            newToken!,
+            requestId,
+          );
+          debugPrint('Retry rejectFriendRequest response: $retryResponse');
+
+          if (retryResponse['statusCode'] == 200 ||
+              retryResponse['statusCode'] == 204) {
+            friendsList.removeWhere(
+              (friend) => friend.id.toString() == requestId,
+            );
+            showCustomSnackBar(
+              title: 'Success',
+              message: 'Friend request rejected successfully',
+              isSuccess: true,
+            );
+          } else {
+            final errorMsg =
+                retryResponse['data']['error'] ??
+                'Failed to reject friend request after token refresh';
+            debugPrint('Retry rejectFriendRequest Error: $errorMsg');
+            _setError(errorMsg);
+            Get.offAllNamed('/login');
+          }
+        } else {
+          _setError('Failed to refresh token. Please log in again.');
+          Get.offAllNamed('/login');
+        }
       } else {
         final errorMsg =
             response['data']['error'] ?? 'Failed to reject friend request';
+        debugPrint('rejectFriendRequest Error: $errorMsg');
         _setError(errorMsg);
       }
-    } catch (e, st) {
-      debugPrint('rejectFriendRequest Exception: $e\n$st');
+    } catch (e, stackTrace) {
+      debugPrint('rejectFriendRequest Exception: $e\n$stackTrace');
       _setError('Failed to reject friend request: $e');
     } finally {
       _setLoading(false);
@@ -187,7 +265,7 @@ class ProfileController extends GetxController {
 
   Future<void> deleteFriendRequest(String requestId) async {
     if (authController.accessToken.value.isEmpty) {
-      debugPrint('No auth token available');
+      debugPrint('deleteFriendRequest: No auth token available');
       _setLoading(false);
       showCustomSnackBar(
         title: 'Error',
@@ -199,6 +277,7 @@ class ProfileController extends GetxController {
     }
 
     final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
     _setLoading(true);
 
     try {
@@ -206,20 +285,51 @@ class ProfileController extends GetxController {
       debugPrint('deleteFriendRequest response: $response');
 
       if (response['statusCode'] == 204) {
-        // Optionally update friendsList by removing the deleted request
         friendsList.removeWhere((friend) => friend.id == int.parse(requestId));
         showCustomSnackBar(
           title: 'Success',
           message: 'Friend request deleted successfully',
           isSuccess: true,
         );
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.deleteFriendRequest(
+            newToken!,
+            requestId,
+          );
+          debugPrint('Retry deleteFriendRequest response: $retryResponse');
+
+          if (retryResponse['statusCode'] == 204) {
+            friendsList.removeWhere(
+              (friend) => friend.id == int.parse(requestId),
+            );
+            showCustomSnackBar(
+              title: 'Success',
+              message: 'Friend request deleted successfully',
+              isSuccess: true,
+            );
+          } else {
+            final errorMsg =
+                retryResponse['data']['error'] ??
+                'Failed to delete friend request after token refresh';
+            debugPrint('Retry deleteFriendRequest Error: $errorMsg');
+            _setError(errorMsg);
+            Get.offAllNamed('/login');
+          }
+        } else {
+          _setError('Failed to refresh token. Please log in again.');
+          Get.offAllNamed('/login');
+        }
       } else {
         final errorMsg =
             response['data']['error'] ?? 'Failed to delete friend request';
+        debugPrint('deleteFriendRequest Error: $errorMsg');
         _setError(errorMsg);
       }
-    } catch (e, st) {
-      debugPrint('deleteFriendRequest Exception: $e\n$st');
+    } catch (e, stackTrace) {
+      debugPrint('deleteFriendRequest Exception: $e\n$stackTrace');
       _setError('Failed to delete friend request: $e');
     } finally {
       _setLoading(false);
@@ -228,7 +338,7 @@ class ProfileController extends GetxController {
 
   Future<void> sendFriendRequest(String receiverId) async {
     if (authController.accessToken.value.isEmpty) {
-      debugPrint('No auth token available');
+      debugPrint('sendFriendRequest: No auth token available');
       _setLoading(false);
       showCustomSnackBar(
         title: 'Error',
@@ -240,6 +350,7 @@ class ProfileController extends GetxController {
     }
 
     final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
     _setLoading(true);
 
     try {
@@ -247,19 +358,48 @@ class ProfileController extends GetxController {
       debugPrint('sendFriendRequest response: $response');
 
       if (response['statusCode'] == 200 || response['statusCode'] == 201) {
-        // Optionally update friendsList or other state if needed
         showCustomSnackBar(
           title: 'Success',
           message: 'Friend request sent successfully',
           isSuccess: true,
         );
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.sendFriendRequest(
+            newToken!,
+            receiverId,
+          );
+          debugPrint('Retry sendFriendRequest response: $retryResponse');
+
+          if (retryResponse['statusCode'] == 200 ||
+              retryResponse['statusCode'] == 201) {
+            showCustomSnackBar(
+              title: 'Success',
+              message: 'Friend request sent successfully',
+              isSuccess: true,
+            );
+          } else {
+            final errorMsg =
+                retryResponse['data']['error'] ??
+                'Failed to send friend request after token refresh';
+            debugPrint('Retry sendFriendRequest Error: $errorMsg');
+            _setError(errorMsg);
+            Get.offAllNamed('/login');
+          }
+        } else {
+          _setError('Failed to refresh token. Please log in again.');
+          Get.offAllNamed('/login');
+        }
       } else {
         final errorMsg =
             response['data']['error'] ?? 'Failed to send friend request';
+        debugPrint('sendFriendRequest Error: $errorMsg');
         _setError(errorMsg);
       }
-    } catch (e, st) {
-      debugPrint('sendFriendRequest Exception: $e\n$st');
+    } catch (e, stackTrace) {
+      debugPrint('sendFriendRequest Exception: $e\n$stackTrace');
       _setError('Failed to send friend request: $e');
     } finally {
       _setLoading(false);
@@ -268,7 +408,7 @@ class ProfileController extends GetxController {
 
   Future<void> fetchFriends() async {
     if (authController.accessToken.value.isEmpty) {
-      debugPrint('No auth token available');
+      debugPrint('fetchFriends: No auth token available');
       _setLoading(false);
       showCustomSnackBar(
         title: 'Error',
@@ -280,6 +420,7 @@ class ProfileController extends GetxController {
     }
 
     final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
     _setLoading(true);
 
     try {
@@ -290,12 +431,38 @@ class ProfileController extends GetxController {
         final data = response['data']['friends_and_requests'] as List<dynamic>;
         friendsList.value = data.map((json) => Friend.fromJson(json)).toList();
         friendsListCount.value++;
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.fetchFriends(newToken!);
+          debugPrint('Retry fetchFriends response: $retryResponse');
+
+          if (retryResponse['statusCode'] == 200) {
+            final data =
+                retryResponse['data']['friends_and_requests'] as List<dynamic>;
+            friendsList.value =
+                data.map((json) => Friend.fromJson(json)).toList();
+            friendsListCount.value++;
+          } else {
+            final errorMsg =
+                retryResponse['data']['error'] ??
+                'Failed to load friends after token refresh';
+            debugPrint('Retry fetchFriends Error: $errorMsg');
+            _setError(errorMsg);
+            Get.offAllNamed('/login');
+          }
+        } else {
+          _setError('Failed to refresh token. Please log in again.');
+          Get.offAllNamed('/login');
+        }
       } else {
         final errorMsg = response['data']['error'] ?? 'Failed to load friends';
+        debugPrint('fetchFriends Error: $errorMsg');
         _setError(errorMsg);
       }
-    } catch (e, st) {
-      debugPrint('fetchFriends Exception: $e\n$st');
+    } catch (e, stackTrace) {
+      debugPrint('fetchFriends Exception: $e\n$stackTrace');
       _setError('Failed to load friends: $e');
     } finally {
       _setLoading(false);
@@ -307,31 +474,70 @@ class ProfileController extends GetxController {
     final String name = nameController.value.text.trim();
     final File profilePhoto = pickedImage.value!;
     final String token = authController.accessToken.value;
+    final String refreshToken = authController.refreshToken.value;
     debugPrint('Updating profile with token: $token');
 
     try {
       _setLoading(true);
+
+      // Try the first API call to update the profile
       final response = await apiService.updateUserProfile(
         username,
         name,
         profilePhoto,
         token,
       );
+
       if (response['statusCode'] == 200) {
+        // Profile updated successfully
         final data = response['data'];
-        final message = data['message'] ?? 'Password set successfully';
+        final message = data['message'] ?? 'Profile updated successfully';
         showCustomSnackBar(title: 'Success', message: message, isSuccess: true);
         authController.isSignedIn.value = true;
+
+        // Navigate to the next screen
         Get.offAll(
           () => LinkSocialView(),
           transition: Transition.rightToLeftWithFade,
         );
+      } else if (response['statusCode'] == 401) {
+        // Token expired, attempt to refresh and retry the update
+        final refreshed = await authController.refreshAccessToken(refreshToken);
+        if (refreshed) {
+          // Retry the profile update with the new token
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.updateUserProfile(
+            username,
+            name,
+            profilePhoto,
+            newToken,
+          );
+
+          if (retryResponse['statusCode'] == 200) {
+            final data = retryResponse['data'];
+            final message = data['message'] ?? 'Profile updated successfully';
+            showCustomSnackBar(
+              title: 'Success',
+              message: message,
+              isSuccess: true,
+            );
+            authController.isSignedIn.value = true;
+
+            Get.offAll(
+              () => LinkSocialView(),
+              transition: Transition.rightToLeftWithFade,
+            );
+          } else {
+            _setError('Failed to update profile after token refresh.');
+          }
+        } else {
+          _setError('Failed to refresh token. Please log in again.');
+        }
       } else {
+        // Handle other error responses
         final data = response['data'];
         final errorMsg =
-            data['messages'] is String
-                ? data['messages']
-                : data['detail'] ?? 'Unknown error occurred';
+            data['messages'] ?? data['detail'] ?? 'Unknown error occurred';
         errorMessage.value = errorMsg;
         _setError('Failed to update profile: $errorMsg');
       }
@@ -422,16 +628,15 @@ class ProfileController extends GetxController {
     }
   }
 
-  var hasMore = true.obs;
-  var isMoreLoading = false.obs;
-  var page = 1.obs;
-
   Future<void> fetchUserProfile() async {
     final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
+    debugPrint('Fetching profile with token: $token');
+
     try {
       _setLoading(true);
       final response = await apiService.getUserProfile(token);
-      debugPrint('API response: $response');
+      debugPrint('fetchUserProfile response: $response');
 
       if (response['statusCode'] == 200) {
         final up = UserProfile.fromJson(response['data'] ?? {});
@@ -448,27 +653,50 @@ class ProfileController extends GetxController {
           message: 'Profile fetched successfully',
           isSuccess: true,
         );
-      } else {
-        String errorMsg = 'Failed to fetch profile';
-        if (response['statusCode'] == 401) {
-          final data = response['data'] ?? {};
-          if (data['messages'] is List &&
-              (data['messages'] as List).isNotEmpty) {
-            errorMsg =
-                (data['messages'] as List)[0]['message'] ??
-                'Token is expired or invalid';
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.getUserProfile(newToken!);
+          debugPrint('Retry fetchUserProfile response: $retryResponse');
+
+          if (retryResponse['statusCode'] == 200) {
+            final up = UserProfile.fromJson(retryResponse['data'] ?? {});
+            userProfile.value = up;
+
+            userName.value = up.username;
+            name.value = up.name;
+            profilePhoto.value = up.profilePhoto ?? '';
+            email.value = up.email;
+            friendsCount.value = up.friendsCount;
+
+            showCustomSnackBar(
+              title: 'Success',
+              message: 'Profile fetched successfully',
+              isSuccess: true,
+            );
           } else {
-            errorMsg = data['detail'] ?? 'Authentication failed';
+            final errorMsg =
+                retryResponse['data']['error'] ??
+                'Failed to fetch profile after token refresh';
+            debugPrint('Retry fetchUserProfile Error: $errorMsg');
+            _setError(errorMsg);
+            Get.offAllNamed('/login');
           }
         } else {
-          errorMsg = response['data']?['detail'] ?? 'Unknown error occurred';
+          _setError('Failed to refresh token. Please log in again.');
+          Get.offAllNamed('/login');
         }
-        errorMessage.value = errorMsg;
-        _setError('Failed to fetch profile: $errorMsg');
+      } else {
+        final errorMsg =
+            response['data']['error'] ??
+            response['data']['detail'] ??
+            'Failed to fetch profile';
+        debugPrint('fetchUserProfile Error: $errorMsg');
+        _setError(errorMsg);
       }
-    } catch (e, st) {
-      debugPrint('Fetch profile error: $e\n$st');
-      errorMessage.value = 'Error: $e';
+    } catch (e, stackTrace) {
+      debugPrint('fetchUserProfile Exception: $e\n$stackTrace');
       _setError('Failed to fetch profile: $e');
     } finally {
       _setLoading(false);
@@ -477,8 +705,8 @@ class ProfileController extends GetxController {
 
   Future<void> fetchOtherUserPost({bool isLoadMore = false}) async {
     if (authController.accessToken.value.isEmpty) {
-      debugPrint('No auth token available');
-      isLoading(false);
+      debugPrint('fetchOtherUserPost: No auth token available');
+      _setLoading(false);
       hasMore(false);
       showCustomSnackBar(
         title: 'Error',
@@ -490,61 +718,89 @@ class ProfileController extends GetxController {
     }
 
     final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
 
     if (isLoadMore) {
       if (!hasMore.value || isMoreLoading.value) return;
-      isMoreLoading(true);
+      _setMoreLoading(true);
       page.value += 1;
     } else {
-      isLoading(true);
+      _setLoading(true);
       page.value = 1;
       otherUserPosts.clear();
     }
 
     debugPrint(
-      'Calling fetchOthersPost with token: $token, page: ${page.value}',
+      'Calling fetchOtherUserPost with token: $token, userId: ${userId.value}, page: ${page.value}',
     );
+
     try {
       final response = await apiService.fetchOtherUserPost(token, userId.value);
-      debugPrint('fetchOthersPost response: $response');
+      debugPrint('fetchOtherUserPost response: $response');
 
       if (response['statusCode'] == 200) {
         final data = response['data'] as List<dynamic>;
         if (data.isEmpty) {
           hasMore(false);
-          debugPrint('No more posts available');
+          debugPrint('fetchOtherUserPost: No more posts available');
           otherUserPostsCount.value++;
         } else {
           otherUserPosts.addAll(data.cast<Map<String, dynamic>>());
-          // otherUserPosts.refresh();
           debugPrint('Posts added: ${otherUserPosts.length}');
+        }
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.fetchOtherUserPost(
+            newToken!,
+            userId.value,
+          );
+          debugPrint('Retry fetchOtherUserPost response: $retryResponse');
+
+          if (retryResponse['statusCode'] == 200) {
+            final data = retryResponse['data'] as List<dynamic>;
+            if (data.isEmpty) {
+              hasMore(false);
+              debugPrint('fetchOtherUserPost: No more posts available');
+              otherUserPostsCount.value++;
+            } else {
+              otherUserPosts.addAll(data.cast<Map<String, dynamic>>());
+              debugPrint('Posts added: ${otherUserPosts.length}');
+            }
+          } else {
+            hasMore(false);
+            final errorMsg =
+                retryResponse['data']['error'] ??
+                'Failed to load posts after token refresh';
+            debugPrint('Retry fetchOtherUserPost Error: $errorMsg');
+            _setError(errorMsg);
+            Get.offAllNamed('/login');
+          }
+        } else {
+          hasMore(false);
+          _setError('Failed to refresh token. Please log in again.');
+          Get.offAllNamed('/login');
         }
       } else {
         hasMore(false);
         final errorMsg = response['data']['error'] ?? 'Failed to load posts';
         debugPrint('fetchOtherUserPost Error: $errorMsg');
-        showCustomSnackBar(title: 'Error', message: errorMsg, isSuccess: false);
+        _setError(errorMsg);
       }
     } catch (e, stackTrace) {
       debugPrint('fetchOtherUserPost Exception: $e\n$stackTrace');
-      isLoading(false);
       hasMore(false);
-      showCustomSnackBar(
-        title: 'Error',
-        message: 'Failed to load posts: $e',
-        isSuccess: false,
-      );
+      _setError('Failed to load posts: $e');
     } finally {
-      isLoading(false);
-      isMoreLoading(false);
+      _setLoading(false);
+      _setMoreLoading(false);
     }
   }
 
   Future<void> fetchUsers() async {
-    final String token = authController.accessToken.value;
-
-    if (token.isEmpty) {
-      debugPrint('No auth token available');
+    if (authController.accessToken.value.isEmpty) {
+      debugPrint('fetchUsers: No auth token available');
       _setLoading(false);
       showCustomSnackBar(
         title: 'Error',
@@ -555,6 +811,8 @@ class ProfileController extends GetxController {
       return;
     }
 
+    final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
     _setLoading(true);
 
     try {
@@ -564,12 +822,36 @@ class ProfileController extends GetxController {
       if (response['statusCode'] == 200) {
         final data = response['data'] as List<dynamic>;
         usersList.value = data.map((json) => UserModel.fromJson(json)).toList();
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.fetchUsers(newToken!);
+          debugPrint('Retry fetchUsers response: $retryResponse');
+
+          if (retryResponse['statusCode'] == 200) {
+            final data = retryResponse['data'] as List<dynamic>;
+            usersList.value =
+                data.map((json) => UserModel.fromJson(json)).toList();
+          } else {
+            final errorMsg =
+                retryResponse['data']['error'] ??
+                'Failed to load users after token refresh';
+            debugPrint('Retry fetchUsers Error: $errorMsg');
+            _setError(errorMsg);
+            Get.offAllNamed('/login');
+          }
+        } else {
+          _setError('Failed to refresh token. Please log in again.');
+          Get.offAllNamed('/login');
+        }
       } else {
         final errorMsg = response['data']['error'] ?? 'Failed to load users';
+        debugPrint('fetchUsers Error: $errorMsg');
         _setError(errorMsg);
       }
-    } catch (e, st) {
-      debugPrint('fetchUsers Exception: $e\n$st');
+    } catch (e, stackTrace) {
+      debugPrint('fetchUsers Exception: $e\n$stackTrace');
       _setError('Failed to load users: $e');
     } finally {
       _setLoading(false);
@@ -577,42 +859,102 @@ class ProfileController extends GetxController {
   }
 
   Future<void> toggleOthersLike(int postId, int index) async {
-    final post = otherUserPosts[index];
-    final isLiked = post['is_liked'];
-    final token = authController.accessToken.value;
+    if (authController.accessToken.value.isEmpty) {
+      debugPrint('toggleOthersLike: No auth token available');
+      _setLoading(false);
+      showCustomSnackBar(
+        title: 'Error',
+        message: 'Please log in to like posts',
+        isSuccess: false,
+      );
+      Get.offAllNamed('/login');
+      return;
+    }
 
-    isLoading(true);
+    final post = otherUserPosts[index];
+    final isLiked = post['is_liked'] ?? false;
+    final String token = authController.accessToken.value;
+    final String refresh = authController.refreshToken.value;
+
+    // Optimistic update
+    final updatedPost = Map<String, dynamic>.from(post);
+    updatedPost['is_liked'] = !isLiked;
+    updatedPost['react_count'] =
+        isLiked
+            ? (post['react_count'] ?? 0) - 1
+            : (post['react_count'] ?? 0) + 1;
+    otherUserPosts[index] = updatedPost;
+    otherUserPosts.refresh();
 
     try {
       final response = await apiService.toggleLike(postId, isLiked, token);
+      debugPrint('toggleOthersLike response: $response');
 
       if (response['statusCode'] == 200) {
-        // Successfully toggled the like state
         debugPrint('Like toggled successfully');
-        post['is_liked'] = !isLiked;
-        post['react_count'] =
-            isLiked ? post['react_count'] - 1 : post['react_count'] + 1;
-        otherUserPosts[index] = Map.from(post); // Update the post in the list
-        otherUserPosts.refresh(); // Refresh the UI
+        if (response['data'] is Map<String, dynamic>) {
+          final serverData = response['data'] as Map<String, dynamic>;
+          final mergedPost = Map<String, dynamic>.from(otherUserPosts[index]);
+          mergedPost['is_liked'] = serverData['is_liked'] ?? !isLiked;
+          mergedPost['react_count'] =
+              serverData['react_count'] ?? updatedPost['react_count'];
+          otherUserPosts[index] = mergedPost;
+          otherUserPosts.refresh();
+        }
+      } else if (response['statusCode'] == 401) {
+        final refreshed = await authController.refreshAccessToken(refresh);
+        if (refreshed) {
+          final newToken = await authController.getAccessToken();
+          final retryResponse = await apiService.toggleLike(
+            postId,
+            isLiked,
+            newToken!,
+          );
+          debugPrint('Retry toggleOthersLike response: $retryResponse');
+
+          if (retryResponse['statusCode'] == 200) {
+            debugPrint('Like toggled successfully');
+            if (retryResponse['data'] is Map<String, dynamic>) {
+              final serverData = retryResponse['data'] as Map<String, dynamic>;
+              final mergedPost = Map<String, dynamic>.from(
+                otherUserPosts[index],
+              );
+              mergedPost['is_liked'] = serverData['is_liked'] ?? !isLiked;
+              mergedPost['react_count'] =
+                  serverData['react_count'] ?? updatedPost['react_count'];
+              otherUserPosts[index] = mergedPost;
+              otherUserPosts.refresh();
+            }
+          } else {
+            otherUserPosts[index] = post;
+            otherUserPosts.refresh();
+            final errorMsg =
+                retryResponse['data']['error'] ??
+                'Failed to update like after token refresh';
+            debugPrint('Retry toggleOthersLike Error: $errorMsg');
+            _setError(errorMsg);
+            Get.offAllNamed('/login');
+          }
+        } else {
+          otherUserPosts[index] = post;
+          otherUserPosts.refresh();
+          _setError('Failed to refresh token. Please log in again.');
+          Get.offAllNamed('/login');
+        }
       } else {
-        // Handle error from API
-        Get.snackbar('Error', response['data']['error']);
+        otherUserPosts[index] = post;
+        otherUserPosts.refresh();
+        final errorMsg = response['data']['error'] ?? 'Failed to update like';
+        debugPrint('toggleOthersLike Error: $errorMsg');
+        _setError(errorMsg);
       }
-    } catch (e) {
-      // Handle unexpected errors
-      Get.snackbar('Error', 'Failed to update like: $e');
+    } catch (e, stackTrace) {
+      debugPrint('toggleOthersLike Exception: $e\n$stackTrace');
+      otherUserPosts[index] = post;
+      otherUserPosts.refresh();
+      _setError('Failed to update like: $e');
     } finally {
-      isLoading(false); // Stop loading
+      _setLoading(false);
     }
   }
-
-  void setAccountSelectedTab(String tab) => accountSelectedTab.value = tab;
-  void setSelectedTab(String tab) => selectedTab.value = tab;
-  void toggleSwitch(bool value) => isSwitched.value = value;
-
-
-
-
-
-  void increment() => count.value++;
 }

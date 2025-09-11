@@ -28,7 +28,7 @@ class AccountView extends GetView<ProfileController> {
           (arguments.length > 1 && arguments[1] != null)
               ? arguments[1]!
               : 'myProfile';
-
+      debugPrint('viewType _________________________ $viewType ________________');
       if (viewType == 'othersProfile') {
         final String? argUserId = (arguments.isNotEmpty) ? arguments[0] : null;
         if (argUserId == null || argUserId.isEmpty) return;
@@ -195,6 +195,9 @@ class AccountView extends GetView<ProfileController> {
 
   Map<String, dynamic>? _unifiedProfileMap(String viewType) {
     if (viewType == 'othersProfile') {
+      debugPrint(
+        'controller.othersUserProfile.value_________________ ${controller.othersUserProfile.value}',
+      );
       return controller.othersUserProfile.value;
     }
     final me = controller.userProfile.value;
@@ -212,12 +215,12 @@ class AccountView extends GetView<ProfileController> {
   }
 }
 
-
 class _MyHeader extends GetView<ProfileController> {
   const _MyHeader({required this.profile});
   final Map<String, dynamic> profile;
   @override
   Widget build(BuildContext context) {
+    debugPrint('profile__________________________________ ${profile['username']}');
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -338,7 +341,7 @@ class _OtherHeader extends GetView<ProfileController> {
   final Map<String, dynamic> profile;
   @override
   Widget build(BuildContext context) {
-    controller.userName=profile['userName'];
+    debugPrint('profile__________________________________ ${profile['username']}');
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -424,7 +427,7 @@ class _OtherHeader extends GetView<ProfileController> {
 
 class _BackgroundSection extends GetView<ProfileController> {
   final ChatController chat = Get.find<ChatController>();
-   _BackgroundSection({required this.viewType, required this.profile});
+  _BackgroundSection({required this.viewType, required this.profile});
   final String viewType;
   final Map<String, dynamic> profile;
   @override
@@ -595,11 +598,12 @@ class _BackgroundSection extends GetView<ProfileController> {
                   Expanded(
                     child: CustomButton(
                       onPress: () async {
-                        // print("otherUserId______________________ $otherUserId\n currentUserId______________________________ $currentUserId");
+                        // debugPrint("otherUserId______________________ $otherUserId\n currentUserId______________________________ $currentUserId");
                         final chat = Get.put(ChatController());
                         await chat.openWithOtherUser(
                           otherUserId: otherUserId,
-                          currentUserId: currentUserId, // or wherever you store it
+                          currentUserId:
+                              currentUserId, // or wherever you store it
                         );
                         if (chat.roomId.value != null) {
                           // Get.to(() => ChatScreen(roomId: chat.roomId.value!));
