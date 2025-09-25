@@ -202,7 +202,7 @@ class MemoryController extends GetxController {
           );
         }
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.fetchCondolences(
@@ -300,7 +300,7 @@ class MemoryController extends GetxController {
           isSuccess: true,
         );
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.createCondolence(
@@ -414,7 +414,7 @@ class MemoryController extends GetxController {
           debugPrint('Memories added: ${memoriesList.length}');
         }
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.fetchMemories(
@@ -496,7 +496,7 @@ class MemoryController extends GetxController {
           isSuccess: true,
         );
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.deletePerson(
@@ -588,7 +588,7 @@ class MemoryController extends GetxController {
           debugPrint('Persons added: ${personsList.length}');
         }
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.fetchPersons(newToken!);
@@ -679,7 +679,7 @@ class MemoryController extends GetxController {
           arguments: {'index': index.toString()},
         );
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.updatePerson(
@@ -770,7 +770,7 @@ class MemoryController extends GetxController {
           transition: Transition.rightToLeftWithFade,
         );
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.createPerson(
@@ -854,7 +854,7 @@ class MemoryController extends GetxController {
         );
         Get.off(() => Navigation(), transition: Transition.fadeIn);
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.updateMemory(
@@ -931,7 +931,7 @@ class MemoryController extends GetxController {
         );
         Get.off(() => Navigation(), transition: Transition.fadeIn);
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.createMemory(

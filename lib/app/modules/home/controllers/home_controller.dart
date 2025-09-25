@@ -69,7 +69,7 @@ class HomeController extends GetxController {
         );
         content = ''.obs;
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.postCreate(

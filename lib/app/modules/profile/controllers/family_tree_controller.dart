@@ -100,7 +100,7 @@ class FamilyTreeController extends GetxController {
           isSuccess: true,
         );
       } else if (response.statusCode == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           var retryRequest = http.MultipartRequest('PATCH', url)
@@ -214,7 +214,7 @@ class FamilyTreeController extends GetxController {
           isSuccess: true,
         );
       } else if (response.statusCode == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await http.get(

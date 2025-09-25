@@ -103,7 +103,7 @@ class PostController extends GetxController {
         // trust server payload
         comments[commentIndex] = {...comments[commentIndex], ...server};
       } else if (res['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryRes = await apiService.updateComment(newToken!, id.toString(), trimmed);
@@ -194,7 +194,7 @@ class PostController extends GetxController {
           isSuccess: true,
         );
       } else if (res['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryRes = await apiService.deleteComment(newToken!, id.toString());
@@ -302,7 +302,7 @@ class PostController extends GetxController {
           comments[commentIndex] = merged;
         }
       } else if (res['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryRes =
@@ -399,7 +399,7 @@ class PostController extends GetxController {
         //   othersPost.refresh();
         // }
       } else if (res['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryRes = await apiService.createCommentOnPost(newToken!, postId, text);
@@ -511,7 +511,7 @@ class PostController extends GetxController {
           hasMore(false);
         }
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.fetchCommentsOnPost(newToken!, postId);
@@ -603,7 +603,7 @@ class PostController extends GetxController {
   //       posts[index] = mergedPost;
   //       posts.refresh();
   //     } else if (response['statusCode'] == 401) {
-  //       final refreshed = await authController.refreshAccessToken(refresh);
+  //       final refreshed = await authController.refreshAccessToken();
   //       if (refreshed) {
   //         final newToken = await authController.getAccessToken();
   //         final retryResponse = await apiService.toggleLike(newToken!, postId);
@@ -723,7 +723,7 @@ class PostController extends GetxController {
   //       othersPost[index] = mergedPost;
   //       othersPost.refresh();
   //     } else if (response['statusCode'] == 401) {
-  //       final refreshed = await authController.refreshAccessToken(refresh);
+  //       final refreshed = await authController.refreshAccessToken();
   //       if (refreshed) {
   //         final newToken = await authController.getAccessToken();
   //         final retryResponse = await apiService.toggleLike(newToken!, postId);
@@ -879,7 +879,7 @@ class PostController extends GetxController {
           debugPrint('Posts added: ${posts.length}');
         }
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.fetchPosts(newToken!);
@@ -978,7 +978,7 @@ class PostController extends GetxController {
           debugPrint('Posts added: ${othersPost.length}');
         }
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.fetchOthersPost(newToken!);

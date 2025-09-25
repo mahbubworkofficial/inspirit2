@@ -177,7 +177,7 @@ class ExploreController extends GetxController {
           debugPrint('Events added: ${otherUserEvents.length}');
         }
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.fetchOtherUserEvents(
@@ -256,7 +256,7 @@ class ExploreController extends GetxController {
         eventsList.assignAll(data.map((json) => Event.fromJson(json)).toList());
         eventsListCount.value = eventsList.length;
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.fetchEvents(newToken!);
@@ -352,7 +352,7 @@ class ExploreController extends GetxController {
         }
       });
     } else if (response['statusCode'] == 401) {
-      final refreshed = await authController.refreshAccessToken(refresh);
+      final refreshed = await authController.refreshAccessToken();
       if (refreshed) {
         final newToken = await authController.getAccessToken();
         final retryResponse = await apiService.updateEvent(
@@ -456,7 +456,7 @@ class ExploreController extends GetxController {
         );
         Get.off(() => Navigation(), transition: Transition.fadeIn);
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.createEvent(

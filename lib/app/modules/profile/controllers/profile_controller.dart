@@ -143,7 +143,7 @@ class ProfileController extends GetxController {
         );
         await fetchFriends();
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.acceptFriendRequest(
@@ -218,7 +218,7 @@ class ProfileController extends GetxController {
           isSuccess: true,
         );
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.rejectFriendRequest(
@@ -292,7 +292,7 @@ class ProfileController extends GetxController {
           isSuccess: true,
         );
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.deleteFriendRequest(
@@ -364,7 +364,7 @@ class ProfileController extends GetxController {
           isSuccess: true,
         );
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.sendFriendRequest(
@@ -432,7 +432,7 @@ class ProfileController extends GetxController {
         friendsList.value = data.map((json) => Friend.fromJson(json)).toList();
         friendsListCount.value++;
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.fetchFriends(newToken!);
@@ -502,7 +502,7 @@ class ProfileController extends GetxController {
         );
       } else if (response['statusCode'] == 401) {
         // Token expired, attempt to refresh and retry the update
-        final refreshed = await authController.refreshAccessToken(refreshToken);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           // Retry the profile update with the new token
           final newToken = await authController.getAccessToken();
@@ -654,7 +654,7 @@ class ProfileController extends GetxController {
           isSuccess: true,
         );
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.getUserProfile(newToken!);
@@ -749,7 +749,7 @@ class ProfileController extends GetxController {
           debugPrint('Posts added: ${otherUserPosts.length}');
         }
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.fetchOtherUserPost(
@@ -823,7 +823,7 @@ class ProfileController extends GetxController {
         final data = response['data'] as List<dynamic>;
         usersList.value = data.map((json) => UserModel.fromJson(json)).toList();
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.fetchUsers(newToken!);
@@ -902,7 +902,7 @@ class ProfileController extends GetxController {
           otherUserPosts.refresh();
         }
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.toggleLike(

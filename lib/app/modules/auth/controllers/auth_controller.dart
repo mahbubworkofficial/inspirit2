@@ -206,7 +206,7 @@ class AuthController extends GetxController {
           debugPrint('Token found, but verification failed');
         }
       } else if (refreshToken != null && refreshToken.isNotEmpty) {
-        final refreshed = await refreshAccessToken(refreshToken);
+        final refreshed = await refreshAccessToken();
         if (refreshed) {
           final newToken = await _readFromStorage('access_token');
           accessToken.value = newToken!;
@@ -229,9 +229,10 @@ class AuthController extends GetxController {
     }
   }
 
-  Future<bool> refreshAccessToken(String refresh) async {
+  Future<bool> refreshAccessToken() async {
+    final refresh = await _readFromStorage('refresh_token');
     try {
-      final response = await apiService.refreshToken(refresh);
+      final response = await apiService.refreshToken(refresh!);
       if (response['statusCode'] == 200) {
         debugPrint('response __________________ $response');
         final newAccessToken = response['data']['access'];
@@ -310,7 +311,7 @@ class AuthController extends GetxController {
           debugPrint('Error: No checkout URL provided');
         }
       } else if (response['statusCode'] == 401) {
-        final refreshed = await refreshAccessToken(refresh);
+        final refreshed = await refreshAccessToken();
         if (refreshed) {
           final newToken = await getAccessToken();
           final retryResponse = await apiService.createSubscription(

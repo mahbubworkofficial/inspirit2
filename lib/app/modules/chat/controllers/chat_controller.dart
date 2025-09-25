@@ -249,7 +249,7 @@ class ChatController extends GetxController {
               () => scrollToBottom(),
         );
       } else if (response['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryResponse = await apiService.fetchMessages(roomId.toString(), newToken!);
@@ -430,7 +430,7 @@ class ChatController extends GetxController {
         }
         rooms.assignAll(list);
       } else if (res['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryRes = await apiService.fetchChatRooms(newToken!);
@@ -526,7 +526,7 @@ class ChatController extends GetxController {
 
         Future.delayed(const Duration(milliseconds: 300), () => scrollToBottom());
       } else if (res['statusCode'] == 401) {
-        final refreshed = await authController.refreshAccessToken(refresh);
+        final refreshed = await authController.refreshAccessToken();
         if (refreshed) {
           final newToken = await authController.getAccessToken();
           final retryRes = await apiService.createOrGetChatRoom(newToken!, participants: participants);
