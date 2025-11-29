@@ -50,16 +50,6 @@ class AuthView extends GetView<AuthController> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      SizedBox(height: 10.h),
-                      Text(
-                        'hello joyce',
-                        style: TextStyle(
-                          color: AppColor.textGreyColor2,
-                          fontSize: 16.sp,
-                          fontFamily: 'Montserrat',
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
                     ],
                   ),
                   SizedBox(height: 20.h),

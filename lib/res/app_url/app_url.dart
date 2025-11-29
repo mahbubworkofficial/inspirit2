@@ -1,8 +1,8 @@
 class AppUrl {
   static const String _baseUrl =
-      'https://cowbird-central-crawdad.ngrok-free.app/api';
+      'https://noncircuitous-lauryn-pseudosocialistic.ngrok-free.dev/api';
   static const String _webSocketUrl =
-      'wss://cowbird-central-crawdad.ngrok-free.app/users';
+      'wss://noncircuitous-lauryn-pseudosocialistic.ngrok-free.dev/users';
   static const String loginUrl = '$_baseUrl/users/login/';
   static const String refreshUrl = '$_baseUrl/users/token/refresh/';
   static const String setPassword = '$_baseUrl/users/password/reset/';
