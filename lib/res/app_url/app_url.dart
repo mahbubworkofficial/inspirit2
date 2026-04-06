@@ -1,6 +1,6 @@
 class AppUrl {
   static const String _baseUrl =
-      'https://noncircuitous-lauryn-pseudosocialistic.ngrok-free.dev/api';
+      'http://10.10.13.61:8001';
   static const String _webSocketUrl =
       'wss://noncircuitous-lauryn-pseudosocialistic.ngrok-free.dev/users';
   static const String loginUrl = '$_baseUrl/users/login/';
